@@ -1,0 +1,15 @@
+# Venture Project Configuration
+# This file defines metadata about your game engine project.
+# Place this file at the root of your project.
+
+# Project name (required)
+name: My Game
+
+# Binary output name without extension (required)
+# The extension (.exe for Windows) will be added automatically
+binary_name: my_game
+
+# Steam App ID (optional, required for Steam platform builds)
+# When running with --platform steam, this will be set as the SteamAppId environment variable
+steam_app_id: 480
+
