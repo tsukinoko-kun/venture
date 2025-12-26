@@ -1,6 +1,8 @@
 # Venture
 
-Venture is a comprehensive build tool for the Adventurer game engine. It replaces the Python-based `build.py` with a clean, modular Go implementation using Cobra for CLI management.
+<img src="venture.webp" width="256" height="256">
+
+This is the build tool for the Venture game engine.
 
 ## Features
 
