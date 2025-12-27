@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 )
 
-// packagePlatform creates an AppImage using linuxdeploy
+// packagePlatform creates a Linux distribution bundle with the binary and libraries
 func packagePlatform(config PackageConfig) (string, error) {
-	fmt.Println("Creating Linux AppImage...")
+	fmt.Println("Creating Linux distribution bundle...")
 
 	// Check if linuxdeploy is available
 	linuxdeployPath, err := exec.LookPath("linuxdeploy")
@@ -17,7 +17,7 @@ func packagePlatform(config PackageConfig) (string, error) {
 		return "", fmt.Errorf("linuxdeploy not found. Download it from: https://github.com/linuxdeploy/linuxdeploy/releases")
 	}
 
-	// Create AppDir structure
+	// Create AppDir structure (we'll use linuxdeploy to bundle dependencies)
 	appDirName := config.BinaryName + ".AppDir"
 	appDir := filepath.Join(config.OutputDir, appDirName)
 	usrBinDir := filepath.Join(appDir, "usr", "bin")
@@ -64,7 +64,7 @@ func packagePlatform(config PackageConfig) (string, error) {
 		fmt.Printf("  Copied library: %s\n", libName)
 	}
 
-	// Create .desktop file
+	// Create .desktop file (required by linuxdeploy)
 	desktopFile := filepath.Join(appDir, config.BinaryName+".desktop")
 	desktopContent := fmt.Sprintf(`[Desktop Entry]
 Type=Application
@@ -81,7 +81,6 @@ Terminal=false
 	fmt.Println("  Created .desktop file")
 
 	// Create a simple icon file (linuxdeploy requires one)
-	// In a real project, you'd have an actual icon
 	iconFile := filepath.Join(appDir, config.BinaryName+".png")
 	// Create a minimal 1x1 PNG as placeholder
 	minimalPNG := []byte{
@@ -96,22 +95,14 @@ Terminal=false
 		return "", fmt.Errorf("writing icon file: %w", err)
 	}
 
-	// Run linuxdeploy to create AppImage
-	fmt.Println("Running linuxdeploy to create AppImage and bundle libraries...")
-
-	outputFileName := fmt.Sprintf("%s-%s.AppImage", config.BinaryName, config.Target)
-	outputPath := filepath.Join(config.OutputDir, outputFileName)
-
-	// Remove old AppImage if it exists
-	os.Remove(outputPath)
+	// Run linuxdeploy to bundle dependencies (but don't create AppImage)
+	fmt.Println("Running linuxdeploy to bundle dependencies...")
 
 	cmd := exec.Command(linuxdeployPath,
 		"--appdir", appDir,
-		"--output", "appimage",
 		"--executable", targetBinary,
 	)
 	cmd.Dir = config.OutputDir
-	cmd.Env = append(os.Environ(), "OUTPUT="+outputFileName)
 
 	output, err := cmd.CombinedOutput()
 	fmt.Printf("linuxdeploy output:\n%s\n", string(output))
@@ -120,20 +111,83 @@ Terminal=false
 		return "", fmt.Errorf("running linuxdeploy: %w\nOutput: %s", err, string(output))
 	}
 
-	// linuxdeploy creates the AppImage in the output directory
-	// Find the generated AppImage
-	matches, err := filepath.Glob(filepath.Join(config.OutputDir, "*.AppImage"))
-	if err != nil || len(matches) == 0 {
-		return "", fmt.Errorf("AppImage not found after linuxdeploy execution")
+	// Now create the final distribution structure
+	distDirName := fmt.Sprintf("%s-%s", config.BinaryName, config.Target)
+	distDir := filepath.Join(config.OutputDir, distDirName)
+
+	// Remove old distribution directory if it exists
+	if err := os.RemoveAll(distDir); err != nil {
+		return "", fmt.Errorf("removing old distribution directory: %w", err)
 	}
 
-	appImagePath := matches[0]
-
-	// Make sure it's executable
-	if err := os.Chmod(appImagePath, 0755); err != nil {
-		return "", fmt.Errorf("making AppImage executable: %w", err)
+	// Create dist directory structure
+	distLibDir := filepath.Join(distDir, "lib")
+	if err := os.MkdirAll(distDir, 0755); err != nil {
+		return "", fmt.Errorf("creating distribution directory: %w", err)
+	}
+	if err := os.MkdirAll(distLibDir, 0755); err != nil {
+		return "", fmt.Errorf("creating lib directory: %w", err)
 	}
 
-	fmt.Printf("\n✅ Linux AppImage created: %s\n", appImagePath)
-	return appImagePath, nil
+	// Copy the binary from AppDir/usr/bin to dist root
+	finalBinary := filepath.Join(distDir, config.BinaryName)
+	if err := copyFile(targetBinary, finalBinary); err != nil {
+		return "", fmt.Errorf("copying binary to dist: %w", err)
+	}
+	if err := os.Chmod(finalBinary, 0755); err != nil {
+		return "", fmt.Errorf("making binary executable: %w", err)
+	}
+	fmt.Printf("  Copied binary to distribution directory\n")
+
+	// Copy all libraries from AppDir/usr/lib to dist/lib
+	libEntries, err := os.ReadDir(usrLibDir)
+	if err != nil {
+		return "", fmt.Errorf("reading lib directory: %w", err)
+	}
+
+	for _, entry := range libEntries {
+		if entry.IsDir() {
+			continue
+		}
+		srcLib := filepath.Join(usrLibDir, entry.Name())
+		dstLib := filepath.Join(distLibDir, entry.Name())
+		if err := copyFile(srcLib, dstLib); err != nil {
+			return "", fmt.Errorf("copying library %s: %w", entry.Name(), err)
+		}
+	}
+	fmt.Printf("  Copied %d libraries to lib/\n", len(libEntries))
+
+	// Copy assets to dist root
+	if _, err := os.Stat(config.AssetsDir); err == nil {
+		assetsTarget := filepath.Join(distDir, "assets")
+		if err := copyDir(config.AssetsDir, assetsTarget); err != nil {
+			return "", fmt.Errorf("copying assets to dist: %w", err)
+		}
+		fmt.Printf("  Copied assets to distribution directory\n")
+	}
+
+	// Create a launch script that sets LD_LIBRARY_PATH
+	launchScriptPath := filepath.Join(distDir, "launch.sh")
+	launchScript := fmt.Sprintf(`#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+export LD_LIBRARY_PATH="$SCRIPT_DIR/lib:$LD_LIBRARY_PATH"
+exec "$SCRIPT_DIR/%s" "$@"
+`, config.BinaryName)
+
+	if err := os.WriteFile(launchScriptPath, []byte(launchScript), 0755); err != nil {
+		return "", fmt.Errorf("writing launch script: %w", err)
+	}
+	fmt.Printf("  Created launch script: launch.sh\n")
+
+	// Clean up the temporary AppDir
+	if err := os.RemoveAll(appDir); err != nil {
+		fmt.Printf("Warning: failed to clean up AppDir: %v\n", err)
+	}
+
+	fmt.Printf("\n✅ Linux distribution bundle created: %s\n", distDir)
+	fmt.Printf("   Binary: %s\n", config.BinaryName)
+	fmt.Printf("   Libraries: lib/\n")
+	fmt.Printf("   Launch script: launch.sh (sets LD_LIBRARY_PATH)\n")
+	
+	return distDir, nil
 }

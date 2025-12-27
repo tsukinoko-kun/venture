@@ -24,7 +24,7 @@ var (
 var buildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Build and package the project for distribution",
-	Long:  `Builds the project for the current OS and creates a distribution package (.app on macOS, AppImage on Linux).`,
+	Long:  `Builds the project for the current OS and creates a distribution package (.app on macOS, bundled directory on Linux).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectRoot, err := getProjectRoot()
 		if err != nil {
