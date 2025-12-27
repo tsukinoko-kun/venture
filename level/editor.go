@@ -28,6 +28,7 @@ type Editor struct {
 	folderStructure map[string][]string // folder path -> list of files in that folder
 	folders         []string            // list of all folders
 	selectedFolder  string              // currently selected folder
+	selectedTexture string              // currently selected texture path (for painting)
 	toolList        widget.List
 	assetList       widget.List
 	folderList      widget.List
@@ -46,6 +47,7 @@ func NewEditor(theme *material.Theme, levelFilePath, assetsDir string, level *Le
 		folderStructure: make(map[string][]string),
 		folders:         []string{},
 		selectedFolder:  "", // root folder
+		selectedTexture: "", // no texture selected initially
 		toolList: widget.List{
 			List: layout.List{
 				Axis: layout.Vertical,
@@ -246,9 +248,13 @@ func (e *Editor) layoutAssetTile(gtx layout.Context, index int, relPath, fileNam
 	// Load the image (from cache or disk)
 	img, err := e.loadAssetImage(relPath)
 
-	// Handle click events
-	clicked := e.assetButtons[index].Clicked(gtx)
-	_ = clicked // TODO: handle selection
+	// Handle click events to select texture
+	if e.assetButtons[index].Clicked(gtx) {
+		e.selectedTexture = relPath
+	}
+
+	// Check if this texture is currently selected
+	isSelected := e.selectedTexture == relPath
 
 	return material.Clickable(gtx, &e.assetButtons[index], func(gtx layout.Context) layout.Dimensions {
 		return layout.UniformInset(unit.Dp(4)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -266,35 +272,93 @@ func (e *Editor) layoutAssetTile(gtx layout.Context, index int, relPath, fileNam
 					gtx.Constraints.Min.Y = size
 					gtx.Constraints.Max.Y = size
 
-					// Draw background
-					defer clip.Rect{Max: image.Point{X: size, Y: size}}.Push(gtx.Ops).Pop()
-					paint.ColorOp{Color: color.NRGBA{R: 60, G: 60, B: 60, A: 255}}.Add(gtx.Ops)
-					paint.PaintOp{}.Add(gtx.Ops)
+					// Create a stack for layering selection highlight and image
+					return layout.Stack{}.Layout(gtx,
+						// Background layer
+						layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+							defer clip.Rect{Max: image.Point{X: size, Y: size}}.Push(gtx.Ops).Pop()
+							// Use different background color when selected
+							if isSelected {
+								paint.ColorOp{Color: color.NRGBA{R: 70, G: 120, B: 180, A: 255}}.Add(gtx.Ops)
+							} else {
+								paint.ColorOp{Color: color.NRGBA{R: 60, G: 60, B: 60, A: 255}}.Add(gtx.Ops)
+							}
+							paint.PaintOp{}.Add(gtx.Ops)
+							return layout.Dimensions{Size: image.Point{X: size, Y: size}}
+						}),
+						// Image layer
+						layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+							if err != nil {
+								// Show error placeholder
+								return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									label := material.Body2(e.theme, "?")
+									label.Color = color.NRGBA{R: 150, G: 150, B: 150, A: 255}
+									return label.Layout(gtx)
+								})
+							}
 
-					if err != nil {
-						// Show error placeholder
-						return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							label := material.Body2(e.theme, "?")
-							label.Color = color.NRGBA{R: 150, G: 150, B: 150, A: 255}
-							return label.Layout(gtx)
-						})
-					}
+							// Render the image centered with preserved aspect ratio
+							imgSize := img.Bounds().Size()
+							maxDim := max(imgSize.X, imgSize.Y)
+							if maxDim == 0 {
+								maxDim = 1
+							}
+							scale := float32(size) / float32(maxDim)
 
-					// Render the image centered with preserved aspect ratio
-					imgSize := img.Bounds().Size()
-					maxDim := max(imgSize.X, imgSize.Y)
-					if maxDim == 0 {
-						maxDim = 1
-					}
-					scale := float32(size) / float32(maxDim)
+							// Use widget.Image to properly render with scaling
+							return widget.Image{
+								Src:      paint.NewImageOp(img),
+								Fit:      widget.Contain, // Preserve aspect ratio and fit within bounds
+								Scale:    scale,
+								Position: layout.Center,
+							}.Layout(gtx)
+						}),
+						// Selection border overlay
+						layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+							if isSelected {
+								// Draw a border around the selected texture
+								borderWidth := 3
+								rect := image.Rectangle{Max: image.Point{X: size, Y: size}}
 
-					// Use widget.Image to properly render with scaling
-					return widget.Image{
-						Src:      paint.NewImageOp(img),
-						Fit:      widget.Contain, // Preserve aspect ratio and fit within bounds
-						Scale:    scale,
-						Position: layout.Center,
-					}.Layout(gtx)
+								// Draw top border
+								topRect := image.Rectangle{
+									Min: rect.Min,
+									Max: image.Point{X: rect.Max.X, Y: rect.Min.Y + borderWidth},
+								}
+								defer clip.Rect(topRect).Push(gtx.Ops).Pop()
+								paint.ColorOp{Color: color.NRGBA{R: 100, G: 180, B: 255, A: 255}}.Add(gtx.Ops)
+								paint.PaintOp{}.Add(gtx.Ops)
+
+								// Draw bottom border
+								bottomRect := image.Rectangle{
+									Min: image.Point{X: rect.Min.X, Y: rect.Max.Y - borderWidth},
+									Max: rect.Max,
+								}
+								defer clip.Rect(bottomRect).Push(gtx.Ops).Pop()
+								paint.ColorOp{Color: color.NRGBA{R: 100, G: 180, B: 255, A: 255}}.Add(gtx.Ops)
+								paint.PaintOp{}.Add(gtx.Ops)
+
+								// Draw left border
+								leftRect := image.Rectangle{
+									Min: rect.Min,
+									Max: image.Point{X: rect.Min.X + borderWidth, Y: rect.Max.Y},
+								}
+								defer clip.Rect(leftRect).Push(gtx.Ops).Pop()
+								paint.ColorOp{Color: color.NRGBA{R: 100, G: 180, B: 255, A: 255}}.Add(gtx.Ops)
+								paint.PaintOp{}.Add(gtx.Ops)
+
+								// Draw right border
+								rightRect := image.Rectangle{
+									Min: image.Point{X: rect.Max.X - borderWidth, Y: rect.Min.Y},
+									Max: rect.Max,
+								}
+								defer clip.Rect(rightRect).Push(gtx.Ops).Pop()
+								paint.ColorOp{Color: color.NRGBA{R: 100, G: 180, B: 255, A: 255}}.Add(gtx.Ops)
+								paint.PaintOp{}.Add(gtx.Ops)
+							}
+							return layout.Dimensions{Size: image.Point{X: size, Y: size}}
+						}),
+					)
 				}),
 				// Filename label
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -302,7 +366,12 @@ func (e *Editor) layoutAssetTile(gtx layout.Context, index int, relPath, fileNam
 						// Limit width to tile size
 						gtx.Constraints.Max.X = gtx.Dp(unit.Dp(96))
 						label := material.Caption(e.theme, fileName)
-						label.Color = color.NRGBA{R: 200, G: 200, B: 200, A: 255}
+						// Highlight selected texture's filename
+						if isSelected {
+							label.Color = color.NRGBA{R: 100, G: 180, B: 255, A: 255}
+						} else {
+							label.Color = color.NRGBA{R: 200, G: 200, B: 200, A: 255}
+						}
 						label.Alignment = 1 // center aligned (text.Middle)
 						return label.Layout(gtx)
 					})
@@ -560,4 +629,10 @@ func (e *Editor) layoutBottomBar(gtx layout.Context) layout.Dimensions {
 			)
 		},
 	)
+}
+
+// GetSelectedTexture returns the relative path of the currently selected texture
+// Returns an empty string if no texture is selected
+func (e *Editor) GetSelectedTexture() string {
+	return e.selectedTexture
 }
