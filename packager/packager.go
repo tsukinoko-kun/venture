@@ -115,6 +115,11 @@ func addDirToZip(zipWriter *zip.Writer, dirPath, nameInZip string) error {
 			return nil
 		}
 
+		// Skip .DS_Store and other hidden files
+		if info.Name() == ".DS_Store" || strings.HasPrefix(info.Name(), "._") {
+			return nil
+		}
+
 		// Calculate relative path
 		relPath, err := filepath.Rel(dirPath, path)
 		if err != nil {
@@ -168,4 +173,3 @@ func addDirToZip(zipWriter *zip.Writer, dirPath, nameInZip string) error {
 		return nil
 	})
 }
-
