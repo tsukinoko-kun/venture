@@ -2,105 +2,26 @@
 
 <img src="venture.webp" width="256" height="256">
 
-This is the build tool for the Venture game engine.
+Venture is a build tool for the Adventurer game engine, written in Go. It orchestrates the complete build pipeline from source code to distributable packages.
 
-## Features
+## What It Does
 
-- **Import Linting**: Scans Odin source files for forbidden imports that prevent console portability
-- **Protobuf Generation**: Automatically generates Odin code from `.proto` files
-- **Clay C Library Compilation**: Compiles the Clay UI library with clang
-- **Steam Library Management**: Downloads and manages Steamworks SDK libraries
-- **Odin Compilation**: Builds the Odin game with platform-specific settings
-- **Distribution Packaging**: 
-  - **macOS**: Creates a zip archive with the binary, assets, and all shared libraries bundled using `dylibbundler`
-  - **Linux**: Creates AppImage packages with all dependencies using `linuxdeploy`
-  - **Windows**: Creates a zip archive with the binary, assets, and all required DLLs
-- **Code Formatting**: Runs `odinfmt` on the source code
+Venture automates the entire build process for Odin-based game projects:
+
+1. **Lints** source code for console portability issues (checking for forbidden imports)
+2. **Generates** Odin code from Protocol Buffer definitions
+3. **Compiles** the Clay UI C library using clang
+4. **Downloads/manages** Steamworks SDK libraries (when using Steam platform)
+5. **Compiles** Odin source code with platform-specific settings
+6. **Packages** everything into distributable archives with all dependencies bundled
 
 ## Installation
 
 ```bash
-cd venture
-go build -o venture
+go install .
 ```
 
-Then move the `venture` binary to a location in your PATH, or use it directly from the venture directory.
-
-## Usage
-
-### Commands
-
-#### Build
-Build and package for distribution:
-```bash
-venture build [--platform PLATFORM] [--debug] [--release]
-```
-
-**Note**: Venture only builds for the current operating system, as cross-compilation is not supported when bundling shared libraries.
-
-Options:
-- `--platform, -p`: Storefront platform (steam/fallback, default: fallback)
-- `--debug, -d`: Build with debug symbols
-- `--release, -r`: Build with optimizations
-
-Example:
-```bash
-# Build for current platform with fallback platform
-venture build
-
-# Build with Steam platform and optimizations
-venture build --platform steam --release
-```
-
-#### Run
-Build and run for the current platform (development):
-```bash
-venture run [--platform PLATFORM] [--debug] [--release]
-```
-
-Options:
-- `--platform, -p`: Storefront platform (steam/fallback, default: fallback)
-- `--debug, -d`: Build with debug symbols
-- `--release, -r`: Build with optimizations
-
-Example:
-```bash
-# Run with fallback platform
-venture run
-
-# Run with Steam platform and debug symbols
-venture run --platform steam --debug
-```
-
-#### Lint
-Check source code for console portability issues:
-```bash
-venture lint
-```
-
-#### Format
-Format Odin source code:
-```bash
-venture fmt [--check]
-```
-
-Options:
-- `--check`: Check formatting without modifying files (dry run)
-
-## Architecture
-
-Venture is organized into focused packages:
-
-- **platform**: Platform detection
-- **linter**: Import linting for console portability
-- **formatter**: Odin code formatting
-- **protobuf**: Protobuf code generation
-- **clay**: Clay C library compilation
-- **steamworks**: Steam library management and downloading
-- **odin**: Odin compilation
-- **packager**: Distribution packaging (creates zip archives on macOS/Windows, AppImages on Linux)
-
-Each command in `cmd/` orchestrates these packages in a high-level, declarative way.
+Move the `venture` binary to a location in your PATH, or run it from the project directory.
 
 ## Requirements
 
@@ -108,31 +29,188 @@ Each command in `cmd/` orchestrates these packages in a high-level, declarative 
 - Odin compiler
 - `protoc` (Protocol Buffers compiler)
 - `protoc-gen-odin` (Odin protobuf plugin)
-- `odinfmt` (Odin formatter)
-- `clang` (for Clay C compilation)
-- **macOS only**: `dylibbundler` (install with: `brew install dylibbundler`)
-- **Linux only**: `linuxdeploy` (download from: https://github.com/linuxdeploy/linuxdeploy/releases)
+- `odinfmt` (Odin code formatter)
+- `clang` (for compiling Clay C library)
+- **macOS only**: `dylibbundler` (install with `brew install dylibbundler`)
+- **Linux only**: `linuxdeploy` (download from https://github.com/linuxdeploy/linuxdeploy/releases)
 
-## Output
+## Project Configuration
 
-- **Build command on macOS**: Creates zip archive in `./build/` directory
-  - Example: `./build/adventurer-darwin_arm64.zip`
-  - Contains: binary, `assets/` directory, and `libs/` directory with all shared libraries bundled
-  - Extract and run the binary - shared libraries will be found via `@executable_path/libs/`
+Venture expects a `venture.yaml` file at the root of your game project:
+
+```yaml
+# Project name
+name: My Game
+
+# Binary output name (without extension)
+binary_name: my_game
+
+# Steam App ID (optional, required for --platform steam builds)
+steam_app_id: 480
+```
+
+## Commands
+
+### `venture build`
+
+Builds and packages the project for distribution on the current OS. **Cross-compilation is not supported** because bundling platform-specific shared libraries requires running on the target platform.
+
+```bash
+venture build [--platform PLATFORM] [--debug] [--release]
+```
+
+**Options:**
+- `--platform, -p`: Storefront platform integration (`steam` or `fallback`, default: `fallback`)
+- `--debug, -d`: Build with debug symbols
+- `--release, -r`: Build with optimizations
+
+**Build Pipeline:**
+1. Lints `src/` directory for forbidden imports
+2. Generates Odin code from `.proto` files in `proto/` directory
+3. Compiles Clay C library from `vendor/clay/`
+4. Downloads Steam libraries to `vendor/steamworks/redistributable_bin/` (if `--platform steam`)
+5. Compiles Odin source with collection path set to `src/platforms/<platform>/`
+6. Creates distributable package in `build/` directory
+
+**Output Formats:**
+
+- **macOS**: Zip archive (`<binary_name>-darwin_arm64.zip` or `darwin_amd64.zip`)
+  - Contains: binary, `assets/`, and `libs/` with all shared libraries
+  - Uses `dylibbundler` to bundle dependencies with `@executable_path/libs/` rpath
   
-- **Build command on Linux**: Creates AppImage in `./build/` directory
-  - Example: `./build/adventurer-linux_amd64.AppImage`
-  - Contains: executable, assets/, and all dependencies bundled
-  - Self-contained, portable, and executable on most Linux distributions
-
-- **Build command on Windows**: Creates zip archive in `./build/` directory
-  - Example: `./build/adventurer-windows_amd64.zip`
-  - Contains: executable (`.exe`), `assets/` directory, and all required DLLs
-  - Extract and run the executable - DLLs will be found in the same directory
+- **Linux**: Directory bundle (`<binary_name>-linux_amd64/`)
+  - Contains: binary, `assets/`, `lib/` with all shared libraries, and `launch.sh` script
+  - Uses `linuxdeploy` to bundle dependencies
+  - Run via `launch.sh` which sets `LD_LIBRARY_PATH` correctly
   
-- **Run command**: Builds to project root and executes immediately
+- **Windows**: Zip archive (`<binary_name>-windows_amd64.zip`)
+  - Contains: `.exe` binary, `assets/`, and all required DLLs
+  - Automatically detects and includes common DLLs (SDL2, OpenAL, etc.)
+
+**Examples:**
+```bash
+# Build for current platform with fallback
+venture build
+
+# Build with Steam integration and optimizations
+venture build --platform steam --release
+```
+
+### `venture run`
+
+Builds and immediately runs the project on the current platform. Intended for development workflow.
+
+```bash
+venture run [--platform PLATFORM] [--debug] [--release]
+```
+
+**Options:**
+- `--platform, -p`: Storefront platform (`steam` or `fallback`, default: `fallback`)
+- `--debug, -d`: Build with debug symbols
+- `--release, -r`: Build with optimizations
+
+**Behavior:**
+1. Runs the same build pipeline as `venture build` (except packaging)
+2. Copies binary to project root
+3. Copies Steam library to project root (if `--platform steam`)
+4. Sets `SteamAppId` environment variable from `venture.yaml` (if `--platform steam`)
+5. Executes the binary from project root
+6. Cleans up binary and Steam library after execution
+
+**Examples:**
+```bash
+# Run with fallback platform
+venture run
+
+# Run with Steam and debug symbols
+venture run --platform steam --debug
+```
+
+### `venture lint`
+
+Scans Odin source files in `src/` for forbidden imports that prevent console portability.
+
+```bash
+venture lint
+```
+
+This command checks your source code against a list of imports that are not allowed for console builds (e.g., platform-specific APIs that won't work on consoles).
+
+### `venture fmt`
+
+Formats Odin source code in the `src/` directory using `odinfmt`.
+
+```bash
+venture fmt [--check]
+```
+
+**Options:**
+- `--check`: Check formatting without modifying files (dry-run mode for CI)
+
+## Project Structure
+
+Venture expects your game project to follow this structure:
+
+```
+your-game-project/
+├── venture.yaml          # Project configuration
+├── src/                  # Odin source code
+│   └── platforms/
+│       ├── steam/        # Steam-specific code (collection)
+│       └── fallback/     # Fallback platform code (collection)
+├── proto/                # Protocol Buffer definitions (optional)
+├── vendor/
+│   ├── clay/             # Clay UI library source
+│   └── steamworks/       # Steamworks SDK (if using Steam)
+├── assets/               # Game assets (copied to distribution)
+└── build/                # Output directory (created by venture)
+```
+
+## Architecture
+
+Venture is organized into focused packages:
+
+- **`cmd/`**: Command implementations (build, run, lint, fmt)
+- **`project/`**: Project configuration loading (reads `venture.yaml`)
+- **`platform/`**: Platform detection (darwin_arm64, linux_amd64, etc.)
+- **`linter/`**: Import linting for console portability
+- **`formatter/`**: Odin code formatting via `odinfmt`
+- **`protobuf/`**: Protocol Buffer code generation
+- **`clay/`**: Clay C library compilation with clang
+- **`steamworks/`**: Steam library management and downloads
+- **`odin/`**: Odin compiler orchestration
+- **`packager/`**: Platform-specific packaging (uses build tags)
+
+Commands in `cmd/` orchestrate these packages in a declarative, high-level way.
+
+## Platform-Specific Notes
+
+### macOS
+- Requires `dylibbundler` to bundle shared libraries
+- Creates zip archives with libraries in `libs/` subdirectory
+- Binary uses `@executable_path/libs/` rpath to find dependencies
+
+### Linux
+- Requires `linuxdeploy` to analyze and bundle dependencies
+- Creates a directory bundle with `launch.sh` script
+- Launch script sets `LD_LIBRARY_PATH` to `lib/` subdirectory
+- Does NOT create AppImage (creates directory bundle instead)
+
+### Windows
+- Automatically searches for common DLLs (SDL2, OpenAL, etc.)
+- Places all DLLs next to the `.exe` in the zip archive
+- Limited automatic dependency detection (may require manual DLL inclusion)
 
 ## Error Handling
 
-All errors are wrapped with context using `fmt.Errorf`. Commands exit with non-zero status codes on any error, making them suitable for CI/CD pipelines.
+All errors are wrapped with context using `fmt.Errorf`. Commands exit with non-zero status codes on failure, making them suitable for CI/CD pipelines.
 
+## Development
+
+Venture is built using the [Cobra](https://github.com/spf13/cobra) CLI framework and uses standard Go project structure.
+
+To modify or extend Venture:
+
+1. Add new functionality in the appropriate package
+2. Wire it into the command pipeline in `cmd/`
+3. Build tags are used for platform-specific packaging code
