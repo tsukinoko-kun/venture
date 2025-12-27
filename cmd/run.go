@@ -60,7 +60,7 @@ var runCmd = &cobra.Command{
 
 		// Step 3: Compile Clay
 		clayDir := filepath.Join(projectRoot, "vendor", "clay")
-		_, err = clay.Compile(clayDir, currentTarget, false)
+		_, err = clay.Compile(clayDir, currentTarget)
 		if err != nil {
 			return fmt.Errorf("compiling clay: %w", err)
 		}
@@ -99,7 +99,7 @@ var runCmd = &cobra.Command{
 		if runPlatform == "steam" && steamLib != nil {
 			libName := filepath.Base(steamLib.RuntimeLib)
 			copiedLibPath = filepath.Join(projectRoot, libName)
-			
+
 			fmt.Printf("Copying %s...\n", libName)
 			if err := copyFile(steamLib.RuntimeLib, copiedLibPath); err != nil {
 				fmt.Printf("Warning: Failed to copy Steam library: %v\n", err)
@@ -115,7 +115,7 @@ var runCmd = &cobra.Command{
 		runCmd.Stdout = os.Stdout
 		runCmd.Stderr = os.Stderr
 		runCmd.Stdin = os.Stdin
-		
+
 		// Set SteamAppId environment variable if running with Steam platform
 		if runPlatform == "steam" {
 			if config.SteamAppID == "" {
@@ -180,4 +180,3 @@ func copyFile(src, dst string) error {
 
 	return nil
 }
-

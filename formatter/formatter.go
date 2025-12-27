@@ -34,4 +34,3 @@ func Check(srcDir string) error {
 	fmt.Println("✅ Format check completed")
 	return nil
 }
-

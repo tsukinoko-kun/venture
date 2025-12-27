@@ -35,4 +35,3 @@ func init() {
 	rootCmd.AddCommand(fmtCmd)
 	fmtCmd.Flags().BoolVar(&fmtCheck, "check", false, "Check formatting without modifying files")
 }
-

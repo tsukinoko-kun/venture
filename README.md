@@ -8,10 +8,13 @@ This is the build tool for the Venture game engine.
 
 - **Import Linting**: Scans Odin source files for forbidden imports that prevent console portability
 - **Protobuf Generation**: Automatically generates Odin code from `.proto` files
-- **Clay C Library Compilation**: Compiles the Clay UI library with cross-compilation support via Zig
+- **Clay C Library Compilation**: Compiles the Clay UI library with clang
 - **Steam Library Management**: Downloads and manages Steamworks SDK libraries
 - **Odin Compilation**: Builds the Odin game with platform-specific settings
-- **Distribution Packaging**: Creates zip archives ready for distribution to Steam and other platforms
+- **Distribution Packaging**: 
+  - **macOS**: Creates a zip archive with the binary, assets, and all shared libraries bundled using `dylibbundler`
+  - **Linux**: Creates AppImage packages with all dependencies using `linuxdeploy`
+  - **Windows**: Creates a zip archive with the binary, assets, and all required DLLs
 - **Code Formatting**: Runs `odinfmt` on the source code
 
 ## Installation
@@ -30,11 +33,12 @@ Then move the `venture` binary to a location in your PATH, or use it directly fr
 #### Build
 Build and package for distribution:
 ```bash
-venture build [--target TARGET] [--platform PLATFORM] [--debug] [--release]
+venture build [--platform PLATFORM] [--debug] [--release]
 ```
 
+**Note**: Venture only builds for the current operating system, as cross-compilation is not supported when bundling shared libraries.
+
 Options:
-- `--target, -t`: Target platform (windows, linux, macos, macos-intel, or Odin target format)
 - `--platform, -p`: Storefront platform (steam/fallback, default: fallback)
 - `--debug, -d`: Build with debug symbols
 - `--release, -r`: Build with optimizations
@@ -44,11 +48,8 @@ Example:
 # Build for current platform with fallback platform
 venture build
 
-# Build for Windows with Steam platform
-venture build --target windows --platform steam --release
-
-# Build for macOS with optimizations
-venture build --target macos --release
+# Build with Steam platform and optimizations
+venture build --platform steam --release
 ```
 
 #### Run
@@ -90,14 +91,14 @@ Options:
 
 Venture is organized into focused packages:
 
-- **platform**: Platform detection and target mapping
+- **platform**: Platform detection
 - **linter**: Import linting for console portability
 - **formatter**: Odin code formatting
 - **protobuf**: Protobuf code generation
-- **clay**: Clay C library compilation with cross-compilation support
+- **clay**: Clay C library compilation
 - **steamworks**: Steam library management and downloading
 - **odin**: Odin compilation
-- **packager**: Distribution packaging (creates zip archives)
+- **packager**: Distribution packaging (creates zip archives on macOS/Windows, AppImages on Linux)
 
 Each command in `cmd/` orchestrates these packages in a high-level, declarative way.
 
@@ -109,20 +110,25 @@ Each command in `cmd/` orchestrates these packages in a high-level, declarative 
 - `protoc-gen-odin` (Odin protobuf plugin)
 - `odinfmt` (Odin formatter)
 - `clang` (for Clay C compilation)
-- `zig` (optional, for cross-compilation)
-
-## Cross-Compilation
-
-When building for a different platform than the current one:
-- **Clay C library**: Venture attempts to use Zig for cross-compilation. If Zig is not available, it will fail with a helpful error message.
-- **Odin**: Native cross-compilation support via the `-target` flag
-- **Steam libraries**: Pre-built binaries are downloaded from GitHub
+- **macOS only**: `dylibbundler` (install with: `brew install dylibbundler`)
+- **Linux only**: `linuxdeploy` (download from: https://github.com/linuxdeploy/linuxdeploy/releases)
 
 ## Output
 
-- **Build command**: Creates zip files in `./build/` directory
+- **Build command on macOS**: Creates zip archive in `./build/` directory
   - Example: `./build/adventurer-darwin_arm64.zip`
-  - Contains: executable, assets/, and platform libraries (if applicable)
+  - Contains: binary, `assets/` directory, and `libs/` directory with all shared libraries bundled
+  - Extract and run the binary - shared libraries will be found via `@executable_path/libs/`
+  
+- **Build command on Linux**: Creates AppImage in `./build/` directory
+  - Example: `./build/adventurer-linux_amd64.AppImage`
+  - Contains: executable, assets/, and all dependencies bundled
+  - Self-contained, portable, and executable on most Linux distributions
+
+- **Build command on Windows**: Creates zip archive in `./build/` directory
+  - Example: `./build/adventurer-windows_amd64.zip`
+  - Contains: executable (`.exe`), `assets/` directory, and all required DLLs
+  - Extract and run the executable - DLLs will be found in the same directory
   
 - **Run command**: Builds to project root and executes immediately
 

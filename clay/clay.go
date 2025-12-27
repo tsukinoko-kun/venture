@@ -5,13 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 )
 
 // Compile compiles clay_glue.c to an object file.
 // Returns the path to the compiled object file.
-// useZig determines whether to try using Zig for cross-compilation.
-func Compile(clayDir, target string, useZig bool) (string, error) {
+func Compile(clayDir, target string) (string, error) {
 	claySource := filepath.Join(clayDir, "clay_glue.c")
 	clayHeader := filepath.Join(clayDir, "clay.h")
 	clayObject := filepath.Join(clayDir, "clay_glue.o")
@@ -29,40 +27,15 @@ func Compile(clayDir, target string, useZig bool) (string, error) {
 
 	fmt.Println("Compiling clay_glue.c...")
 
-	// Determine if we're cross-compiling
-	currentPlatform := getCurrentPlatform()
-	isCrossCompiling := !isTargetCompatible(currentPlatform, target)
-
-	var compiler string
-	var args []string
-
-	if isCrossCompiling && useZig {
-		// Try to use Zig for cross-compilation
-		zigPath, err := exec.LookPath("zig")
-		if err != nil {
-			return "", fmt.Errorf("zig not found (required for cross-compilation). Please install Zig: https://ziglang.org/download/")
-		}
-
-		compiler = zigPath
-		args = []string{"cc", "-c", claySource, "-o", clayObject, "-O2"}
-
-		// Add target flag for Zig
-		zigTarget := mapOdinToZigTarget(target)
-		if zigTarget != "" {
-			args = append(args, "-target", zigTarget)
-		}
-	} else {
-		// Use clang for same-platform compilation
-		clangPath, err := exec.LookPath("clang")
-		if err != nil {
-			return "", fmt.Errorf("clang not found. Please install clang compiler")
-		}
-
-		compiler = clangPath
-		args = []string{"-c", claySource, "-o", clayObject, "-O2"}
+	// Use clang for compilation
+	clangPath, err := exec.LookPath("clang")
+	if err != nil {
+		return "", fmt.Errorf("clang not found. Please install clang compiler")
 	}
 
-	cmd := exec.Command(compiler, args...)
+	args := []string{"-c", claySource, "-o", clayObject, "-O2"}
+
+	cmd := exec.Command(clangPath, args...)
 	cmd.Dir = clayDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -96,43 +69,3 @@ func needsRecompile(source, header, object string) (bool, error) {
 	objTime := objInfo.ModTime()
 	return objTime.Before(srcInfo.ModTime()) || objTime.Before(hdrInfo.ModTime()), nil
 }
-
-// getCurrentPlatform returns the current platform in a normalized format.
-func getCurrentPlatform() string {
-	return runtime.GOOS
-}
-
-// isTargetCompatible checks if the target is compatible with the current platform.
-func isTargetCompatible(currentPlatform, target string) bool {
-	switch currentPlatform {
-	case "darwin":
-		return target == "darwin_arm64" || target == "darwin_amd64"
-	case "linux":
-		return target == "linux_amd64" || target == "linux_i386"
-	case "windows":
-		return target == "windows_amd64" || target == "windows_i386"
-	default:
-		return false
-	}
-}
-
-// mapOdinToZigTarget maps Odin target strings to Zig target triples.
-func mapOdinToZigTarget(odinTarget string) string {
-	switch odinTarget {
-	case "darwin_arm64":
-		return "aarch64-macos"
-	case "darwin_amd64":
-		return "x86_64-macos"
-	case "linux_amd64":
-		return "x86_64-linux"
-	case "linux_i386":
-		return "i386-linux"
-	case "windows_amd64":
-		return "x86_64-windows"
-	case "windows_i386":
-		return "i386-windows"
-	default:
-		return ""
-	}
-}
-

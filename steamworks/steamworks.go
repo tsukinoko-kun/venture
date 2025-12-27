@@ -157,4 +157,3 @@ func downloadFile(remotePath, localPath string) error {
 	fmt.Printf("Downloaded %s\n", filepath.Base(localPath))
 	return nil
 }
-

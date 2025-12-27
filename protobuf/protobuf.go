@@ -162,4 +162,3 @@ func Clean(outputDir string) error {
 
 	return nil
 }
-

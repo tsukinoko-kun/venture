@@ -111,4 +111,3 @@ func checkFileImports(filepath string) ([]string, error) {
 
 	return errors, nil
 }
-

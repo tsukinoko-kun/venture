@@ -16,7 +16,6 @@ import (
 )
 
 var (
-	buildTarget   string
 	buildPlatform string
 	buildDebug    bool
 	buildRelease  bool
@@ -25,7 +24,7 @@ var (
 var buildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Build and package the project for distribution",
-	Long:  `Builds the project for the specified target and creates a distribution zip package.`,
+	Long:  `Builds the project for the current OS and creates a distribution package (.app on macOS, AppImage on Linux).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectRoot, err := getProjectRoot()
 		if err != nil {
@@ -38,19 +37,13 @@ var buildCmd = &cobra.Command{
 			return fmt.Errorf("loading project config: %w", err)
 		}
 
-		// Determine target
-		target := buildTarget
-		if target == "" {
-			target, err = platform.DetectCurrent()
-			if err != nil {
-				return fmt.Errorf("detecting current platform: %w", err)
-			}
-		} else {
-			// Map friendly name to Odin target if needed
-			target = platform.MapTarget(target)
+		// Detect current platform (no cross-compilation support)
+		target, err := platform.DetectCurrent()
+		if err != nil {
+			return fmt.Errorf("detecting current platform: %w", err)
 		}
 
-		fmt.Printf("Building for target: %s, platform: %s\n", target, buildPlatform)
+		fmt.Printf("Building for current platform: %s, platform: %s\n", target, buildPlatform)
 
 		// Step 1: Lint
 		srcDir := filepath.Join(projectRoot, "src")
@@ -66,12 +59,10 @@ var buildCmd = &cobra.Command{
 			return fmt.Errorf("generating protobuf: %w", err)
 		}
 
-		// Step 3: Compile Clay (with Zig for cross-compilation if available)
+		// Step 3: Compile Clay
 		clayDir := filepath.Join(projectRoot, "vendor", "clay")
-		currentTarget, _ := platform.DetectCurrent()
-		useZig := target != currentTarget
-		
-		_, err = clay.Compile(clayDir, target, useZig)
+
+		_, err = clay.Compile(clayDir, target)
 		if err != nil {
 			return fmt.Errorf("compiling clay: %w", err)
 		}
@@ -115,29 +106,28 @@ var buildCmd = &cobra.Command{
 		}
 
 		packageConfig := packager.PackageConfig{
-			BinaryPath: outputPath,
-			BinaryName: config.BinaryName,
-			AssetsDir:  assetsDir,
-			Libraries:  libraries,
-			Target:     target,
-			OutputDir:  buildDir,
+			ProjectRoot: projectRoot,
+			BinaryPath:  outputPath,
+			BinaryName:  config.BinaryName,
+			AssetsDir:   assetsDir,
+			Libraries:   libraries,
+			Target:      target,
+			OutputDir:   buildDir,
 		}
 
-		zipPath, err := packager.Package(packageConfig)
+		packagePath, err := packager.Package(packageConfig)
 		if err != nil {
 			return fmt.Errorf("packaging: %w", err)
 		}
 
-		fmt.Printf("\n✅ Build complete: %s\n", zipPath)
+		fmt.Printf("\n✅ Build complete: %s\n", packagePath)
 		return nil
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(buildCmd)
-	buildCmd.Flags().StringVarP(&buildTarget, "target", "t", "", "Target platform (defaults to current platform)")
 	buildCmd.Flags().StringVarP(&buildPlatform, "platform", "p", "fallback", "Platform (steam/fallback)")
 	buildCmd.Flags().BoolVarP(&buildDebug, "debug", "d", false, "Build with debug symbols")
 	buildCmd.Flags().BoolVarP(&buildRelease, "release", "r", false, "Build with optimizations")
 }
-

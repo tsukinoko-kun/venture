@@ -60,4 +60,3 @@ func joinArgs(args []string) string {
 	}
 	return result
 }
-

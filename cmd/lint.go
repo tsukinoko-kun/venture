@@ -38,4 +38,3 @@ func init() {
 func getProjectRoot() (string, error) {
 	return project.FindProjectRoot()
 }
-
