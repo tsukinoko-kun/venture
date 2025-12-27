@@ -4,17 +4,24 @@ import (
 	"image"
 	"image/color"
 	"io/fs"
+	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"gioui.org/f32"
+	"gioui.org/io/event"
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
+	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"github.com/xfmoulet/qoi"
+	"golang.org/x/exp/shiny/materialdesign/icons"
 )
 
 type Editor struct {
@@ -35,9 +42,35 @@ type Editor struct {
 	folderButtons   []widget.Clickable     // clickable widgets for each folder
 	assetImages     map[string]image.Image // cache of loaded QOI textures
 	assetButtons    []widget.Clickable     // clickable widgets for each asset in grid
+	saveButton      widget.Clickable       // button to save the level
+	saveIcon        *widget.Icon           // icon for the save button
+	dirty           bool                   // true when there are unsaved changes
+
+	// Close confirmation dialog
+	showCloseDialog    bool             // true when showing the close confirmation dialog
+	closeSaveButton    widget.Clickable // "Save" button in close dialog
+	closeDiscardButton widget.Clickable // "Discard" button in close dialog
+	shouldClose        bool             // true when window should actually close
+
+	// Canvas state
+	gridCellSize float32 // size of one grid cell in screen pixels
+	viewOffsetX  float32 // camera pan offset X
+	viewOffsetY  float32 // camera pan offset Y
+	zoom         float32 // zoom level (1.0 = 100%)
+
+	// Mouse/pointer state for canvas interaction
+	isPanning  bool    // true when right mouse button is held down
+	lastMouseX float32 // last mouse X position for drag calculation
+	lastMouseY float32 // last mouse Y position for drag calculation
 }
 
 func NewEditor(theme *material.Theme, levelFilePath, assetsDir string, level *Level) *Editor {
+	// Load the save icon
+	saveIcon, err := widget.NewIcon(icons.ContentSave)
+	if err != nil {
+		log.Printf("Failed to load save icon: %v", err)
+	}
+
 	return &Editor{
 		theme:           theme,
 		levelFilePath:   levelFilePath,
@@ -66,6 +99,12 @@ func NewEditor(theme *material.Theme, levelFilePath, assetsDir string, level *Le
 		folderButtons: []widget.Clickable{},
 		assetImages:   make(map[string]image.Image),
 		assetButtons:  []widget.Clickable{},
+		saveIcon:      saveIcon,
+		// Canvas defaults
+		gridCellSize: 64.0, // Default cell size in screen pixels
+		viewOffsetX:  0.0,
+		viewOffsetY:  0.0,
+		zoom:         1.0,
 	}
 }
 
@@ -493,7 +532,22 @@ func isIgnoredFile(name string) bool {
 }
 
 func (e *Editor) Layout(gtx layout.Context) layout.Dimensions {
-	return layout.Flex{
+	// Handle close dialog buttons
+	if e.closeSaveButton.Clicked(gtx) {
+		if err := e.Save(); err != nil {
+			log.Printf("Failed to save level: %v", err)
+		} else {
+			log.Printf("Level saved to %s", e.levelFilePath)
+		}
+		e.showCloseDialog = false
+		e.shouldClose = true
+	}
+	if e.closeDiscardButton.Clicked(gtx) {
+		e.showCloseDialog = false
+		e.shouldClose = true
+	}
+
+	dims := layout.Flex{
 		Axis: layout.Vertical,
 	}.Layout(gtx,
 		// Top bar
@@ -520,6 +574,13 @@ func (e *Editor) Layout(gtx layout.Context) layout.Dimensions {
 			return e.layoutBottomBar(gtx)
 		}),
 	)
+
+	// Draw close confirmation dialog on top if needed
+	if e.showCloseDialog {
+		e.layoutCloseDialog(gtx)
+	}
+
+	return dims
 }
 
 func (e *Editor) layoutTopBar(gtx layout.Context) layout.Dimensions {
@@ -536,12 +597,52 @@ func (e *Editor) layoutTopBar(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: gtx.Constraints.Min}
 		},
 		func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				filename := filepath.Base(e.levelFilePath)
-				label := material.Body1(e.theme, "Level: "+filename)
-				label.Color = color.NRGBA{R: 220, G: 220, B: 220, A: 255}
-				return label.Layout(gtx)
-			})
+			return layout.Flex{
+				Axis:      layout.Horizontal,
+				Alignment: layout.Middle,
+			}.Layout(gtx,
+				// Level name
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						filename := filepath.Base(e.levelFilePath)
+						title := "Level: " + filename
+						if e.dirty {
+							title += " *" // Add asterisk for unsaved changes
+						}
+						label := material.Body1(e.theme, title)
+						label.Color = color.NRGBA{R: 220, G: 220, B: 220, A: 255}
+						return label.Layout(gtx)
+					})
+				}),
+				// Spacer
+				layout.Rigid(layout.Spacer{Width: unit.Dp(16)}.Layout),
+				// Save button
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					// Handle save button clicks
+					if e.saveButton.Clicked(gtx) {
+						if err := e.Save(); err != nil {
+							log.Printf("Failed to save level: %v", err)
+						} else {
+							log.Printf("Level saved to %s", e.levelFilePath)
+						}
+					}
+
+					// Only show button if icon loaded successfully
+					if e.saveIcon != nil {
+						btn := material.IconButton(e.theme, &e.saveButton, e.saveIcon, "Save level")
+						// Change button color based on dirty state
+						if e.dirty {
+							btn.Background = color.NRGBA{R: 200, G: 120, B: 60, A: 255} // Orange when dirty
+						} else {
+							btn.Background = color.NRGBA{R: 60, G: 120, B: 200, A: 255} // Blue when clean
+						}
+						btn.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+						btn.Size = unit.Dp(20)
+						return btn.Layout(gtx)
+					}
+					return layout.Dimensions{}
+				}),
+			)
 		},
 	)
 }
@@ -585,6 +686,9 @@ func (e *Editor) layoutLeftBar(gtx layout.Context) layout.Dimensions {
 }
 
 func (e *Editor) layoutCanvas(gtx layout.Context) layout.Dimensions {
+	// Handle pointer input for panning and zooming
+	e.handleCanvasInput(gtx)
+
 	return layout.Background{}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			defer clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops).Pop()
@@ -593,13 +697,332 @@ func (e *Editor) layoutCanvas(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: gtx.Constraints.Max}
 		},
 		func(gtx layout.Context) layout.Dimensions {
-			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				label := material.Body1(e.theme, "Canvas Area")
-				label.Color = color.NRGBA{R: 150, G: 150, B: 150, A: 255}
-				return label.Layout(gtx)
-			})
+			// Draw the ground editor grid
+			e.drawGroundGrid(gtx)
+			return layout.Dimensions{Size: gtx.Constraints.Max}
 		},
 	)
+}
+
+// handleCanvasInput processes mouse/pointer events for panning and zooming
+func (e *Editor) handleCanvasInput(gtx layout.Context) {
+	// Register for pointer input events
+	area := clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops)
+
+	// Declare event handler for this canvas area
+	event.Op(gtx.Ops, e)
+
+	area.Pop()
+
+	// Process all pointer events with scroll support
+	for {
+		ev, ok := gtx.Event(pointer.Filter{
+			Target:  e,
+			Kinds:   pointer.Press | pointer.Release | pointer.Drag | pointer.Scroll,
+			ScrollY: pointer.ScrollRange{Min: -100, Max: 100},
+		})
+		if !ok {
+			break
+		}
+
+		switch ev := ev.(type) {
+		case pointer.Event:
+			switch ev.Kind {
+			case pointer.Press:
+				// Start panning on right mouse button press
+				if ev.Buttons == pointer.ButtonSecondary {
+					e.isPanning = true
+					e.lastMouseX = ev.Position.X
+					e.lastMouseY = ev.Position.Y
+				}
+				// Place texture on left mouse button press
+				if ev.Buttons == pointer.ButtonPrimary {
+					e.placeTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
+				}
+
+			case pointer.Release:
+				// Stop panning on right mouse button release
+				if ev.Buttons&pointer.ButtonSecondary == 0 {
+					e.isPanning = false
+				}
+
+			case pointer.Drag:
+				// Pan the canvas if right mouse button is held
+				if e.isPanning {
+					deltaX := ev.Position.X - e.lastMouseX
+					deltaY := ev.Position.Y - e.lastMouseY
+					e.viewOffsetX += deltaX
+					e.viewOffsetY += deltaY
+					e.lastMouseX = ev.Position.X
+					e.lastMouseY = ev.Position.Y
+				}
+				// Place texture while dragging with left mouse button
+				if ev.Buttons == pointer.ButtonPrimary {
+					e.placeTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
+				}
+
+			case pointer.Scroll:
+				// Zoom in/out with mouse wheel
+				// Scroll.Y is positive when scrolling up (zoom in), negative when scrolling down (zoom out)
+				zoomFactor := float32(1.0 + ev.Scroll.Y*0.1)
+				newZoom := e.zoom * zoomFactor
+
+				// Clamp zoom to reasonable limits
+				const minZoom = 0.1
+				const maxZoom = 10.0
+				if newZoom < minZoom {
+					newZoom = minZoom
+				}
+				if newZoom > maxZoom {
+					newZoom = maxZoom
+				}
+
+				// Zoom towards mouse position
+				// Calculate the world position under the mouse before zoom
+				canvasWidth := float32(gtx.Constraints.Max.X)
+				canvasHeight := float32(gtx.Constraints.Max.Y)
+				centerX := canvasWidth / 2.0
+				centerY := canvasHeight / 2.0
+
+				// Mouse position relative to center
+				mouseRelX := ev.Position.X - centerX
+				mouseRelY := ev.Position.Y - centerY
+
+				// Adjust offset to keep the same world point under the mouse
+				zoomRatio := newZoom / e.zoom
+				e.viewOffsetX = (e.viewOffsetX-mouseRelX)*zoomRatio + mouseRelX
+				e.viewOffsetY = (e.viewOffsetY-mouseRelY)*zoomRatio + mouseRelY
+
+				e.zoom = newZoom
+			}
+		}
+	}
+}
+
+// placeTileAtPosition places the selected texture at the grid position under the mouse
+func (e *Editor) placeTileAtPosition(gtx layout.Context, mouseX, mouseY float32) {
+	// Only place if we have a texture selected
+	if e.selectedTexture == "" {
+		return
+	}
+
+	// Convert screen coordinates to grid coordinates
+	canvasWidth := float32(gtx.Constraints.Max.X)
+	canvasHeight := float32(gtx.Constraints.Max.Y)
+	centerX := canvasWidth / 2.0
+	centerY := canvasHeight / 2.0
+
+	cellSize := e.gridCellSize * e.zoom
+
+	// Calculate grid position
+	worldX := mouseX - centerX - e.viewOffsetX
+	worldY := mouseY - centerY - e.viewOffsetY
+
+	gridX := int32(math.Floor(float64(worldX / cellSize)))
+	gridY := int32(math.Floor(float64(worldY / cellSize)))
+
+	// Check if a tile already exists at this position
+	tileIndex := -1
+	for i, tile := range e.level.Ground {
+		if tile.Position.X == gridX && tile.Position.Y == gridY {
+			tileIndex = i
+			break
+		}
+	}
+
+	// Update or add the tile
+	newTile := Tile{
+		Position: Vec2i{X: gridX, Y: gridY},
+		Texture:  e.selectedTexture,
+	}
+
+	if tileIndex >= 0 {
+		// Update existing tile (only if different)
+		if e.level.Ground[tileIndex].Texture != newTile.Texture {
+			e.level.Ground[tileIndex] = newTile
+			e.dirty = true // Mark as dirty when tile changes
+		}
+	} else {
+		// Add new tile
+		e.level.Ground = append(e.level.Ground, newTile)
+		e.dirty = true // Mark as dirty when tile is added
+	}
+}
+
+// drawGroundGrid draws the grid and origin cross for the ground editor
+func (e *Editor) drawGroundGrid(gtx layout.Context) {
+	canvasWidth := float32(gtx.Constraints.Max.X)
+	canvasHeight := float32(gtx.Constraints.Max.Y)
+
+	// Clip all drawing operations to the canvas bounds
+	defer clip.Rect{Max: image.Point{X: int(canvasWidth), Y: int(canvasHeight)}}.Push(gtx.Ops).Pop()
+
+	// Calculate the center of the canvas (this will be our origin)
+	centerX := canvasWidth / 2.0
+	centerY := canvasHeight / 2.0
+
+	// Apply zoom and offset to the cell size
+	cellSize := e.gridCellSize * e.zoom
+
+	// Calculate the range of grid cells to draw (visible area)
+	// We need to figure out which grid cells are visible on screen
+	minGridX := int32(math.Floor(float64((-centerX - e.viewOffsetX) / cellSize)))
+	maxGridX := int32(math.Ceil(float64((canvasWidth - centerX - e.viewOffsetX) / cellSize)))
+	minGridY := int32(math.Floor(float64((-centerY - e.viewOffsetY) / cellSize)))
+	maxGridY := int32(math.Ceil(float64((canvasHeight - centerY - e.viewOffsetY) / cellSize)))
+
+	// Limit the grid range to prevent drawing too many lines
+	const maxGridRange = 100
+	if minGridX < -maxGridRange {
+		minGridX = -maxGridRange
+	}
+	if maxGridX > maxGridRange {
+		maxGridX = maxGridRange
+	}
+	if minGridY < -maxGridRange {
+		minGridY = -maxGridRange
+	}
+	if maxGridY > maxGridRange {
+		maxGridY = maxGridRange
+	}
+
+	// Draw placed tiles first (underneath the grid)
+	e.drawPlacedTiles(gtx, centerX, centerY, cellSize)
+
+	// Draw vertical grid lines
+	gridColor := color.NRGBA{R: 80, G: 80, B: 80, A: 255}
+	for x := minGridX; x <= maxGridX; x++ {
+		screenX := centerX + e.viewOffsetX + float32(x)*cellSize
+
+		// Only draw if the line is within canvas bounds
+		if screenX >= 0 && screenX <= canvasWidth {
+			p1 := f32.Point{X: screenX, Y: 0}
+			p2 := f32.Point{X: screenX, Y: canvasHeight}
+			e.drawLine(gtx, p1, p2, 1, gridColor)
+		}
+	}
+
+	// Draw horizontal grid lines
+	for y := minGridY; y <= maxGridY; y++ {
+		screenY := centerY + e.viewOffsetY + float32(y)*cellSize
+
+		// Only draw if the line is within canvas bounds
+		if screenY >= 0 && screenY <= canvasHeight {
+			p1 := f32.Point{X: 0, Y: screenY}
+			p2 := f32.Point{X: canvasWidth, Y: screenY}
+			e.drawLine(gtx, p1, p2, 1, gridColor)
+		}
+	}
+
+	// Draw origin cross (thicker and different color)
+	originColor := color.NRGBA{R: 255, G: 100, B: 100, A: 255}
+	originX := centerX + e.viewOffsetX
+	originY := centerY + e.viewOffsetY
+
+	// Only draw the cross if it's within or near the visible canvas
+	if originX >= -20 && originX <= canvasWidth+20 && originY >= -20 && originY <= canvasHeight+20 {
+		// Vertical line of cross
+		crossSize := float32(20.0)
+		p1 := f32.Point{X: originX, Y: originY - crossSize}
+		p2 := f32.Point{X: originX, Y: originY + crossSize}
+		e.drawLine(gtx, p1, p2, 3, originColor)
+
+		// Horizontal line of cross
+		p1 = f32.Point{X: originX - crossSize, Y: originY}
+		p2 = f32.Point{X: originX + crossSize, Y: originY}
+		e.drawLine(gtx, p1, p2, 3, originColor)
+	}
+}
+
+// drawPlacedTiles renders all tiles that have been placed in the level
+func (e *Editor) drawPlacedTiles(gtx layout.Context, centerX, centerY, cellSize float32) {
+	for _, tile := range e.level.Ground {
+		// Calculate screen position for this tile
+		screenX := centerX + e.viewOffsetX + float32(tile.Position.X)*cellSize
+		screenY := centerY + e.viewOffsetY + float32(tile.Position.Y)*cellSize
+
+		// Only draw tiles that are visible on screen
+		canvasWidth := float32(gtx.Constraints.Max.X)
+		canvasHeight := float32(gtx.Constraints.Max.Y)
+		if screenX+cellSize < 0 || screenX > canvasWidth || screenY+cellSize < 0 || screenY > canvasHeight {
+			continue
+		}
+
+		// Load the texture image
+		img, err := e.loadAssetImage(tile.Texture)
+		if err != nil {
+			// Draw a placeholder rectangle if texture fails to load
+			defer clip.Rect{
+				Min: image.Point{X: int(screenX), Y: int(screenY)},
+				Max: image.Point{X: int(screenX + cellSize), Y: int(screenY + cellSize)},
+			}.Push(gtx.Ops).Pop()
+			paint.ColorOp{Color: color.NRGBA{R: 255, G: 0, B: 0, A: 128}}.Add(gtx.Ops)
+			paint.PaintOp{}.Add(gtx.Ops)
+			continue
+		}
+
+		// Save the current transform state
+		stack := op.Affine(f32.Affine2D{}.Offset(f32.Point{X: screenX, Y: screenY})).Push(gtx.Ops)
+
+		// Calculate scale to fit the texture in the cell
+		imgBounds := img.Bounds()
+		imgWidth := float32(imgBounds.Dx())
+		imgHeight := float32(imgBounds.Dy())
+
+		scaleX := cellSize / imgWidth
+		scaleY := cellSize / imgHeight
+
+		// Apply scaling transform
+		scaleOp := op.Affine(f32.Affine2D{}.Scale(f32.Point{}, f32.Point{X: scaleX, Y: scaleY})).Push(gtx.Ops)
+
+		// Draw the image at the scaled size
+		imageOp := paint.NewImageOp(img)
+		imageOp.Add(gtx.Ops)
+		paint.PaintOp{}.Add(gtx.Ops)
+
+		scaleOp.Pop()
+		stack.Pop()
+	}
+}
+
+// drawLine draws a line between two points with a given width and color
+func (e *Editor) drawLine(gtx layout.Context, p1, p2 f32.Point, width float32, col color.NRGBA) {
+	// Calculate the direction vector
+	dx := p2.X - p1.X
+	dy := p2.Y - p1.Y
+	length := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+
+	if length == 0 {
+		return // Can't draw a zero-length line
+	}
+
+	// Normalize the direction
+	dx /= length
+	dy /= length
+
+	// Perpendicular vector for width
+	perpX := -dy * width / 2.0
+	perpY := dx * width / 2.0
+
+	// Create a quad (rectangle) for the line
+	var path clip.Path
+	path.Begin(gtx.Ops)
+
+	// Move to first corner
+	path.MoveTo(f32.Point{X: p1.X + perpX, Y: p1.Y + perpY})
+	// Line to second corner
+	path.LineTo(f32.Point{X: p2.X + perpX, Y: p2.Y + perpY})
+	// Line to third corner
+	path.LineTo(f32.Point{X: p2.X - perpX, Y: p2.Y - perpY})
+	// Line to fourth corner
+	path.LineTo(f32.Point{X: p1.X - perpX, Y: p1.Y - perpY})
+	// Close the path
+	path.Close()
+
+	// Draw the filled path
+	defer clip.Outline{Path: path.End()}.Op().Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: col}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
 }
 
 func (e *Editor) layoutBottomBar(gtx layout.Context) layout.Dimensions {
@@ -635,4 +1058,110 @@ func (e *Editor) layoutBottomBar(gtx layout.Context) layout.Dimensions {
 // Returns an empty string if no texture is selected
 func (e *Editor) GetSelectedTexture() string {
 	return e.selectedTexture
+}
+
+// HasUnsavedChanges returns true if there are unsaved changes to the level
+func (e *Editor) HasUnsavedChanges() bool {
+	return e.dirty
+}
+
+// Save saves the level to disk and clears the dirty flag
+func (e *Editor) Save() error {
+	if err := e.level.Save(e.levelFilePath); err != nil {
+		return err
+	}
+	e.dirty = false
+	return nil
+}
+
+// RequestClose is called when the window close is requested
+// Returns true if the window should close, false otherwise
+func (e *Editor) RequestClose() bool {
+	// If no unsaved changes, allow close immediately
+	if !e.dirty {
+		return true
+	}
+
+	// If we have unsaved changes and haven't shown the dialog yet
+	if !e.showCloseDialog {
+		e.showCloseDialog = true
+		return false // Don't close yet, show dialog first
+	}
+
+	// Dialog is showing, return whether user chose to close
+	return e.shouldClose
+}
+
+// ShouldClose returns true if the window should close
+func (e *Editor) ShouldClose() bool {
+	return e.shouldClose
+}
+
+// layoutCloseDialog renders the close confirmation dialog
+func (e *Editor) layoutCloseDialog(gtx layout.Context) layout.Dimensions {
+	// Semi-transparent overlay
+	defer clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: color.NRGBA{R: 0, G: 0, B: 0, A: 200}}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+
+	// Center the dialog
+	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		// Dialog box
+		return layout.Background{}.Layout(gtx,
+			func(gtx layout.Context) layout.Dimensions {
+				// Dark dialog background
+				defer clip.UniformRRect(image.Rectangle{Max: gtx.Constraints.Max}, 8).Push(gtx.Ops).Pop()
+				paint.ColorOp{Color: color.NRGBA{R: 45, G: 45, B: 45, A: 255}}.Add(gtx.Ops)
+				paint.PaintOp{}.Add(gtx.Ops)
+				return layout.Dimensions{Size: gtx.Constraints.Max}
+			},
+			func(gtx layout.Context) layout.Dimensions {
+				return layout.UniformInset(unit.Dp(24)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{
+						Axis: layout.Vertical,
+					}.Layout(gtx,
+						// Title
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Bottom: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								label := material.H6(e.theme, "Unsaved Changes")
+								label.Color = color.NRGBA{R: 240, G: 240, B: 240, A: 255}
+								return label.Layout(gtx)
+							})
+						}),
+						// Message
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Bottom: unit.Dp(24)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								gtx.Constraints.Max.X = gtx.Dp(unit.Dp(400))
+								label := material.Body1(e.theme, "Do you want to save your changes before closing?")
+								label.Color = color.NRGBA{R: 200, G: 200, B: 200, A: 255}
+								return label.Layout(gtx)
+							})
+						}),
+						// Buttons
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{
+								Axis:    layout.Horizontal,
+								Spacing: layout.SpaceEnd,
+							}.Layout(gtx,
+								// Save button
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									btn := material.Button(e.theme, &e.closeSaveButton, "Save")
+									btn.Background = color.NRGBA{R: 60, G: 120, B: 200, A: 255}
+									btn.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+									return layout.Inset{Right: unit.Dp(8)}.Layout(gtx, btn.Layout)
+								}),
+								// Discard button
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									btn := material.Button(e.theme, &e.closeDiscardButton, "Discard")
+									btn.Background = color.NRGBA{R: 200, G: 80, B: 60, A: 255}
+									btn.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+									return btn.Layout(gtx)
+								}),
+							)
+						}),
+					)
+				})
+			},
+		)
+	})
 }

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"image/color"
 	"log"
 	"os"
 	"path/filepath"
@@ -57,19 +58,40 @@ var levelCmd = &cobra.Command{
 
 func run(window *app.Window, levelFilePath, assetsDir string, lvl *level.Level) error {
 	theme := material.NewTheme()
-	editor := level.NewEditor(theme, levelFilePath, assetsDir, lvl)
 	
+	// Apply dark mode palette
+	theme.Palette = material.Palette{
+		Bg:         color.NRGBA{R: 30, G: 30, B: 30, A: 255},       // Dark background
+		Fg:         color.NRGBA{R: 220, G: 220, B: 220, A: 255},    // Light text
+		ContrastBg: color.NRGBA{R: 50, G: 50, B: 50, A: 255},       // Slightly lighter background
+		ContrastFg: color.NRGBA{R: 255, G: 255, B: 255, A: 255},    // White text for contrast
+	}
+	
+	editor := level.NewEditor(theme, levelFilePath, assetsDir, lvl)
+
 	// Load assets from the assets directory
 	if err := editor.LoadAssets(); err != nil {
 		log.Printf("warning: failed to load assets: %v", err)
 	}
-	
+
 	var ops op.Ops
+
 	for {
 		switch e := window.Event().(type) {
 		case app.DestroyEvent:
-			return e.Err
+			// Check if we should close
+			if editor.RequestClose() {
+				return e.Err
+			}
+			// Don't close yet, continue processing
+			window.Invalidate()
+
 		case app.FrameEvent:
+			// Check if we should close after dialog interaction
+			if editor.ShouldClose() {
+				return nil
+			}
+
 			// This graphics context is used for managing the rendering state.
 			gtx := app.NewContext(&ops, e)
 
