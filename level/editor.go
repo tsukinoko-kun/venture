@@ -849,7 +849,7 @@ func (e *Editor) placeTileAtPosition(gtx layout.Context, mouseX, mouseY float32)
 	}
 }
 
-// drawGroundGrid draws the grid and origin cross for the ground editor
+// drawGroundGrid draws the placed tiles for the ground editor
 func (e *Editor) drawGroundGrid(gtx layout.Context) {
 	canvasWidth := float32(gtx.Constraints.Max.X)
 	canvasHeight := float32(gtx.Constraints.Max.Y)
@@ -864,74 +864,8 @@ func (e *Editor) drawGroundGrid(gtx layout.Context) {
 	// Apply zoom and offset to the cell size
 	cellSize := e.gridCellSize * e.zoom
 
-	// Calculate the range of grid cells to draw (visible area)
-	// We need to figure out which grid cells are visible on screen
-	minGridX := int32(math.Floor(float64((-centerX - e.viewOffsetX) / cellSize)))
-	maxGridX := int32(math.Ceil(float64((canvasWidth - centerX - e.viewOffsetX) / cellSize)))
-	minGridY := int32(math.Floor(float64((-centerY - e.viewOffsetY) / cellSize)))
-	maxGridY := int32(math.Ceil(float64((canvasHeight - centerY - e.viewOffsetY) / cellSize)))
-
-	// Limit the grid range to prevent drawing too many lines
-	const maxGridRange = 100
-	if minGridX < -maxGridRange {
-		minGridX = -maxGridRange
-	}
-	if maxGridX > maxGridRange {
-		maxGridX = maxGridRange
-	}
-	if minGridY < -maxGridRange {
-		minGridY = -maxGridRange
-	}
-	if maxGridY > maxGridRange {
-		maxGridY = maxGridRange
-	}
-
-	// Draw placed tiles first (underneath the grid)
+	// Draw placed tiles
 	e.drawPlacedTiles(gtx, centerX, centerY, cellSize)
-
-	// Draw vertical grid lines
-	gridColor := color.NRGBA{R: 80, G: 80, B: 80, A: 255}
-	for x := minGridX; x <= maxGridX; x++ {
-		screenX := centerX + e.viewOffsetX + float32(x)*cellSize
-
-		// Only draw if the line is within canvas bounds
-		if screenX >= 0 && screenX <= canvasWidth {
-			p1 := f32.Point{X: screenX, Y: 0}
-			p2 := f32.Point{X: screenX, Y: canvasHeight}
-			e.drawLine(gtx, p1, p2, 1, gridColor)
-		}
-	}
-
-	// Draw horizontal grid lines
-	for y := minGridY; y <= maxGridY; y++ {
-		screenY := centerY + e.viewOffsetY + float32(y)*cellSize
-
-		// Only draw if the line is within canvas bounds
-		if screenY >= 0 && screenY <= canvasHeight {
-			p1 := f32.Point{X: 0, Y: screenY}
-			p2 := f32.Point{X: canvasWidth, Y: screenY}
-			e.drawLine(gtx, p1, p2, 1, gridColor)
-		}
-	}
-
-	// Draw origin cross (thicker and different color)
-	originColor := color.NRGBA{R: 255, G: 100, B: 100, A: 255}
-	originX := centerX + e.viewOffsetX
-	originY := centerY + e.viewOffsetY
-
-	// Only draw the cross if it's within or near the visible canvas
-	if originX >= -20 && originX <= canvasWidth+20 && originY >= -20 && originY <= canvasHeight+20 {
-		// Vertical line of cross
-		crossSize := float32(20.0)
-		p1 := f32.Point{X: originX, Y: originY - crossSize}
-		p2 := f32.Point{X: originX, Y: originY + crossSize}
-		e.drawLine(gtx, p1, p2, 3, originColor)
-
-		// Horizontal line of cross
-		p1 = f32.Point{X: originX - crossSize, Y: originY}
-		p2 = f32.Point{X: originX + crossSize, Y: originY}
-		e.drawLine(gtx, p1, p2, 3, originColor)
-	}
 }
 
 // drawPlacedTiles renders all tiles that have been placed in the level
@@ -983,46 +917,6 @@ func (e *Editor) drawPlacedTiles(gtx layout.Context, centerX, centerY, cellSize 
 		scaleOp.Pop()
 		stack.Pop()
 	}
-}
-
-// drawLine draws a line between two points with a given width and color
-func (e *Editor) drawLine(gtx layout.Context, p1, p2 f32.Point, width float32, col color.NRGBA) {
-	// Calculate the direction vector
-	dx := p2.X - p1.X
-	dy := p2.Y - p1.Y
-	length := float32(math.Sqrt(float64(dx*dx + dy*dy)))
-
-	if length == 0 {
-		return // Can't draw a zero-length line
-	}
-
-	// Normalize the direction
-	dx /= length
-	dy /= length
-
-	// Perpendicular vector for width
-	perpX := -dy * width / 2.0
-	perpY := dx * width / 2.0
-
-	// Create a quad (rectangle) for the line
-	var path clip.Path
-	path.Begin(gtx.Ops)
-
-	// Move to first corner
-	path.MoveTo(f32.Point{X: p1.X + perpX, Y: p1.Y + perpY})
-	// Line to second corner
-	path.LineTo(f32.Point{X: p2.X + perpX, Y: p2.Y + perpY})
-	// Line to third corner
-	path.LineTo(f32.Point{X: p2.X - perpX, Y: p2.Y - perpY})
-	// Line to fourth corner
-	path.LineTo(f32.Point{X: p1.X - perpX, Y: p1.Y - perpY})
-	// Close the path
-	path.Close()
-
-	// Draw the filled path
-	defer clip.Outline{Path: path.End()}.Op().Push(gtx.Ops).Pop()
-	paint.ColorOp{Color: col}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
 }
 
 func (e *Editor) layoutBottomBar(gtx layout.Context) layout.Dimensions {
