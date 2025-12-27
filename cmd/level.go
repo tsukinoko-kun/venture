@@ -8,7 +8,6 @@ import (
 	"gioui.org/app"
 	"gioui.org/io/system"
 	"gioui.org/op"
-	"gioui.org/text"
 	"gioui.org/widget/material"
 	"github.com/bloodmagesoftware/venture/level"
 	"github.com/spf13/cobra"
@@ -44,7 +43,7 @@ var levelCmd = &cobra.Command{
 		go func() {
 			window := new(app.Window)
 			window.Perform(system.ActionMaximize)
-			err := run(window)
+			err := run(window, levelFilePath, assetsDir, lvl)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -56,8 +55,15 @@ var levelCmd = &cobra.Command{
 	},
 }
 
-func run(window *app.Window) error {
+func run(window *app.Window, levelFilePath, assetsDir string, lvl *level.Level) error {
 	theme := material.NewTheme()
+	editor := level.NewEditor(theme, levelFilePath, assetsDir, lvl)
+	
+	// Load assets from the assets directory
+	if err := editor.LoadAssets(); err != nil {
+		log.Printf("warning: failed to load assets: %v", err)
+	}
+	
 	var ops op.Ops
 	for {
 		switch e := window.Event().(type) {
@@ -67,14 +73,8 @@ func run(window *app.Window) error {
 			// This graphics context is used for managing the rendering state.
 			gtx := app.NewContext(&ops, e)
 
-			// Define an large label with an appropriate text:
-			title := material.H1(theme, "Hello, Gio")
-
-			// Change the position of the label.
-			title.Alignment = text.Middle
-
-			// Draw the label to the graphics context.
-			title.Layout(gtx)
+			// Layout the editor
+			editor.Layout(gtx)
 
 			// Pass the drawing operations to the GPU.
 			e.Frame(gtx.Ops)
