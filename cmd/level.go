@@ -58,15 +58,15 @@ var levelCmd = &cobra.Command{
 
 func run(window *app.Window, levelFilePath, assetsDir string, lvl *level.Level) error {
 	theme := material.NewTheme()
-	
+
 	// Apply dark mode palette
 	theme.Palette = material.Palette{
-		Bg:         color.NRGBA{R: 30, G: 30, B: 30, A: 255},       // Dark background
-		Fg:         color.NRGBA{R: 220, G: 220, B: 220, A: 255},    // Light text
-		ContrastBg: color.NRGBA{R: 50, G: 50, B: 50, A: 255},       // Slightly lighter background
-		ContrastFg: color.NRGBA{R: 255, G: 255, B: 255, A: 255},    // White text for contrast
+		Bg:         color.NRGBA{R: 30, G: 30, B: 30, A: 255},    // Dark background
+		Fg:         color.NRGBA{R: 220, G: 220, B: 220, A: 255}, // Light text
+		ContrastBg: color.NRGBA{R: 50, G: 50, B: 50, A: 255},    // Slightly lighter background
+		ContrastFg: color.NRGBA{R: 255, G: 255, B: 255, A: 255}, // White text for contrast
 	}
-	
+
 	editor := level.NewEditor(theme, levelFilePath, assetsDir, lvl)
 
 	// Load assets from the assets directory

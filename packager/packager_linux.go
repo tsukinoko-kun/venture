@@ -188,6 +188,6 @@ exec "$SCRIPT_DIR/%s" "$@"
 	fmt.Printf("   Binary: %s\n", config.BinaryName)
 	fmt.Printf("   Libraries: lib/\n")
 	fmt.Printf("   Launch script: launch.sh (sets LD_LIBRARY_PATH)\n")
-	
+
 	return distDir, nil
 }
