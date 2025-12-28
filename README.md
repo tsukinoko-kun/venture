@@ -1,6 +1,6 @@
 # Venture
 
-<img src="venture.webp" width="256" height="256">
+<img src="venture.png" width="256" height="256">
 
 Venture is a build tool for the Adventurer game engine, written in Go. It orchestrates the complete build pipeline from source code to distributable packages.
 
@@ -33,6 +33,43 @@ Move the `venture` binary to a location in your PATH, or run it from the project
 - `clang` (for compiling Clay C library)
 - **macOS only**: `dylibbundler` (install with `brew install dylibbundler`)
 - **Linux only**: `linuxdeploy` (download from https://github.com/linuxdeploy/linuxdeploy/releases)
+
+### Level Editor Additional Requirements
+
+The level editor uses CGAL for BSP tree collision detection:
+
+- **CGAL** (Computational Geometry Algorithms Library)
+  - macOS: `brew install cgal`
+  - Linux: `sudo apt-get install libcgal-dev`
+  - Windows: Install via [vcpkg](https://vcpkg.io/) or [MSYS2](https://www.msys2.org/)
+    ```bash
+    # MSYS2 (recommended for MinGW)
+    pacman -S mingw-w64-x86_64-cgal mingw-w64-x86_64-gmp
+    ```
+- **GMP** (GNU Multiple Precision library) - usually installed with CGAL
+
+After installing CGAL, build the C++ wrapper library (statically linked):
+
+```bash
+cd bsp/cgal
+make
+```
+
+## Running
+
+```bash
+# Build
+go build
+
+# Run the level editor
+./venture level levels/test.yaml
+```
+
+For development:
+
+```bash
+go run . level levels/test.yaml
+```
 
 ## Project Configuration
 
