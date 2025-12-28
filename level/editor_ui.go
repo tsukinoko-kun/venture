@@ -223,7 +223,7 @@ func (e *Editor) layoutLeftBar(gtx layout.Context) layout.Dimensions {
 				}),
 				// Tool list
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return material.List(e.theme, &e.toolList).Layout(gtx, 2, func(gtx layout.Context, index int) layout.Dimensions {
+					return material.List(e.theme, &e.toolList).Layout(gtx, 3, func(gtx layout.Context, index int) layout.Dimensions {
 						return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							var btn *material.ButtonStyle
 							var toolName string
@@ -232,17 +232,24 @@ func (e *Editor) layoutLeftBar(gtx layout.Context) layout.Dimensions {
 							if index == 0 {
 								toolName = "Ground"
 								clickable = &e.groundButton
-							} else {
+							} else if index == 1 {
 								toolName = "Collision"
 								clickable = &e.collisionButton
+							} else {
+								toolName = "Collision Test"
+								clickable = &e.collisionTestButton
 							}
 
 							// Handle button clicks
 							if clickable.Clicked(gtx) {
 								if index == 0 {
 									e.currentTool = "ground"
-								} else {
+								} else if index == 1 {
 									e.currentTool = "collision"
+								} else {
+									e.currentTool = "collision_test"
+									// Clear previous test results when switching to collision test tool
+									e.collisionTestPoints = []collisionTestResult{}
 								}
 							}
 
@@ -250,7 +257,9 @@ func (e *Editor) layoutLeftBar(gtx layout.Context) layout.Dimensions {
 							button := material.Button(e.theme, clickable, toolName)
 
 							// Highlight the active tool
-							isActive := (index == 0 && e.currentTool == "ground") || (index == 1 && e.currentTool == "collision")
+							isActive := (index == 0 && e.currentTool == "ground") ||
+								(index == 1 && e.currentTool == "collision") ||
+								(index == 2 && e.currentTool == "collision_test")
 							if isActive {
 								button.Background = color.NRGBA{R: 80, G: 140, B: 200, A: 255}
 							} else {
@@ -450,6 +459,7 @@ func (e *Editor) layoutRightBar(gtx layout.Context) layout.Dimensions {
 							e.selectedPolygonIndex = len(e.level.Collisions) - 1
 							// Mark as dirty
 							e.dirty = true
+							e.markCollisionBSPDirty() // Mark BSP as needing rebuild
 							log.Printf("Created new polygon at index %d", e.selectedPolygonIndex)
 						}
 

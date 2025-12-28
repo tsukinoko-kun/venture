@@ -34,6 +34,52 @@ Move the `venture` binary to a location in your PATH, or run it from the project
 - **macOS only**: `dylibbundler` (install with `brew install dylibbundler`)
 - **Linux only**: `linuxdeploy` (download from https://github.com/linuxdeploy/linuxdeploy/releases)
 
+### Level Editor Additional Requirements
+
+The level editor uses CGAL for BSP tree collision detection:
+
+- **CGAL** (Computational Geometry Algorithms Library)
+  - macOS: `brew install cgal`
+  - Linux: `sudo apt-get install libcgal-dev`
+- **GMP** (GNU Multiple Precision library) - usually installed with CGAL
+
+After installing CGAL, build the C++ wrapper library:
+
+```bash
+cd bsp/cgal
+make
+```
+
+## Running
+
+For development with `go run` (level editor):
+
+```bash
+./run.sh level levels/test.yaml
+```
+
+Or set the library path manually:
+
+```bash
+# macOS
+export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH}:${PWD}/bsp/cgal"
+go run . level levels/test.yaml
+
+# Linux
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${PWD}/bsp/cgal"
+go run . level levels/test.yaml
+```
+
+For the compiled binary:
+
+```bash
+# Build first
+go build
+
+# Run (library path still needed for level editor)
+DYLD_LIBRARY_PATH="${PWD}/bsp/cgal" ./venture level levels/test.yaml
+```
+
 ## Project Configuration
 
 Venture expects a `venture.yaml` file at the root of your game project:

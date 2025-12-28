@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 
+	"github.com/bloodmagesoftware/venture/bsp"
 	"gioui.org/f32"
 	"gioui.org/io/event"
 	"gioui.org/io/pointer"
@@ -32,6 +33,10 @@ func (e *Editor) layoutCanvas(gtx layout.Context) layout.Dimensions {
 			e.drawGroundGrid(gtx)
 			// Draw collision polygons
 			e.drawCollisionPolygons(gtx)
+			// Draw collision test results (if collision test tool is active)
+			if e.currentTool == "collision_test" {
+				e.drawCollisionTestResults(gtx)
+			}
 			return layout.Dimensions{Size: gtx.Constraints.Max}
 		},
 	)
@@ -105,6 +110,9 @@ func (e *Editor) handleCanvasInput(gtx layout.Context) {
 							// Otherwise add a point to the selected polygon
 							e.addCollisionPoint(gtx, ev.Position.X, ev.Position.Y)
 						}
+					} else if e.currentTool == "collision_test" {
+						// Collision test tool: test point collision
+						e.handleCollisionTest(gtx, ev.Position.X, ev.Position.Y)
 					}
 				}
 
@@ -364,6 +372,7 @@ func (e *Editor) addCollisionPoint(gtx layout.Context, mouseX, mouseY float32) {
 	point := Vec2{X: worldX, Y: worldY}
 	e.level.Collisions[e.selectedPolygonIndex].Outline = append(e.level.Collisions[e.selectedPolygonIndex].Outline, point)
 	e.dirty = true
+	e.markCollisionBSPDirty() // Mark BSP as needing rebuild
 }
 
 // snapToGrid snaps a coordinate to the nearest grid point
@@ -441,6 +450,7 @@ func (e *Editor) movePoint(gtx layout.Context, mouseX, mouseY float32) {
 	// Update the point position
 	e.level.Collisions[e.movingPointPolygonIndex].Outline[e.movingPointIndex] = Vec2{X: worldX, Y: worldY}
 	e.dirty = true
+	e.markCollisionBSPDirty() // Mark BSP as needing rebuild
 }
 
 // deleteCollisionPoint finds and deletes the nearest collision point to the mouse in the selected polygon
@@ -494,6 +504,7 @@ func (e *Editor) deleteCollisionPoint(gtx layout.Context, mouseX, mouseY float32
 		}
 
 		e.dirty = true
+		e.markCollisionBSPDirty() // Mark BSP as needing rebuild
 		log.Printf("Deleted collision point at polygon %d, point %d", e.selectedPolygonIndex, foundPointIndex)
 	}
 }
@@ -705,8 +716,117 @@ func (e *Editor) deletePolygonAtPosition(gtx layout.Context, mouseX, mouseY floa
 			// Delete the polygon
 			e.level.Collisions = append(e.level.Collisions[:i], e.level.Collisions[i+1:]...)
 			e.dirty = true
+			e.markCollisionBSPDirty() // Mark BSP as needing rebuild
 			log.Printf("Deleted entire polygon %d", i)
 			return
 		}
+	}
+}
+
+// handleCollisionTest handles click for collision test tool
+func (e *Editor) handleCollisionTest(gtx layout.Context, mouseX, mouseY float32) {
+	// Convert screen coordinates to world coordinates
+	canvasWidth := float32(gtx.Constraints.Max.X)
+	canvasHeight := float32(gtx.Constraints.Max.Y)
+	centerX := canvasWidth / 2.0
+	centerY := canvasHeight / 2.0
+	cellSize := e.gridCellSize * e.zoom
+
+	worldX := (mouseX - centerX - e.viewOffsetX) / cellSize
+	worldY := (mouseY - centerY - e.viewOffsetY) / cellSize
+
+	// Rebuild BSP if dirty
+	if e.collisionTestBSPDirty || e.collisionTestBSP == nil {
+		e.buildCollisionBSP()
+	}
+
+	// Test point collision
+	point := bsp.Point{X: worldX, Y: worldY}
+	isSolid := bsp.PointInBSP(e.collisionTestBSP, point)
+
+	// Create result with point test
+	result := collisionTestResult{
+		WorldX:  worldX,
+		WorldY:  worldY,
+		IsSolid: isSolid,
+	}
+
+	// If we have a previous point, do line trace
+	if len(e.collisionTestPoints) > 0 {
+		prev := e.collisionTestPoints[len(e.collisionTestPoints)-1]
+		result.HasPrevious = true
+		result.PrevWorldX = prev.WorldX
+		result.PrevWorldY = prev.WorldY
+
+		// Perform line trace from previous point to current point
+		hit, hitX, hitY := e.lineTraceBSP(prev.WorldX, prev.WorldY, worldX, worldY)
+		result.LineHit = hit
+		result.LineHitX = hitX
+		result.LineHitY = hitY
+
+		log.Printf("Line trace from (%.3f, %.3f) to (%.3f, %.3f): hit=%v", 
+			prev.WorldX, prev.WorldY, worldX, worldY, hit)
+		if hit {
+			log.Printf("  Hit at (%.3f, %.3f)", hitX, hitY)
+		}
+	}
+
+	// Store result
+	e.collisionTestPoints = append(e.collisionTestPoints, result)
+
+	log.Printf("Collision test at (%.3f, %.3f): solid=%v", worldX, worldY, isSolid)
+}
+
+// drawCollisionTestResults renders the collision test results on the canvas
+func (e *Editor) drawCollisionTestResults(gtx layout.Context) {
+	if len(e.collisionTestPoints) == 0 {
+		return
+	}
+
+	canvasWidth := float32(gtx.Constraints.Max.X)
+	canvasHeight := float32(gtx.Constraints.Max.Y)
+	centerX := canvasWidth / 2.0
+	centerY := canvasHeight / 2.0
+	cellSize := e.gridCellSize * e.zoom
+
+	// Helper to convert world coords to screen coords
+	worldToScreen := func(worldX, worldY float32) (float32, float32) {
+		screenX := worldX*cellSize + centerX + e.viewOffsetX
+		screenY := worldY*cellSize + centerY + e.viewOffsetY
+		return screenX, screenY
+	}
+
+	// Colors from the plan
+	colorGreen := color.NRGBA{R: 0, G: 200, B: 80, A: 255}   // Point (non-solid)
+	colorRed := color.NRGBA{R: 255, G: 60, B: 60, A: 255}     // Point (solid)
+	colorPink := color.NRGBA{R: 255, G: 100, B: 180, A: 255}  // Line trace & intersection
+
+	// Circle radius in pixels
+	circleRadius := float32(6.0)
+
+	// Draw each test result
+	for _, result := range e.collisionTestPoints {
+		screenX, screenY := worldToScreen(result.WorldX, result.WorldY)
+
+		// Draw line trace if it has a previous point
+		if result.HasPrevious {
+			prevScreenX, prevScreenY := worldToScreen(result.PrevWorldX, result.PrevWorldY)
+			
+			// Draw pink line from previous to current
+			e.drawLine(gtx, prevScreenX, prevScreenY, screenX, screenY, 2.0, colorPink)
+
+			// Draw intersection circle if line hit solid
+			if result.LineHit {
+				hitScreenX, hitScreenY := worldToScreen(result.LineHitX, result.LineHitY)
+				e.drawCircle(gtx, hitScreenX, hitScreenY, circleRadius, colorPink)
+			}
+		}
+
+		// Draw point circle (green if non-solid, red if solid)
+		pointColor := colorGreen
+		if result.IsSolid {
+			pointColor = colorRed
+		}
+		e.drawCircle(gtx, screenX, screenY, circleRadius, pointColor)
 	}
 }

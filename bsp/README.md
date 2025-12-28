@@ -210,3 +210,46 @@ point := bsp.Point{X: 50, Y: 50}
 isInSolid := bsp.PointInBSP(root, point)
 ```
 
+## Running with CGAL
+
+This package uses CGAL for convex polygon decomposition. The C++ wrapper library must be built and findable at runtime.
+
+### Building the CGAL wrapper
+
+```bash
+cd cgal
+make
+```
+
+Requirements:
+- CGAL: `brew install cgal` (macOS) or `apt-get install libcgal-dev` (Linux)
+- GMP: Usually installed with CGAL
+
+### Running Tests
+
+Use the provided script that sets the library path:
+
+```bash
+./run_tests.sh
+```
+
+Or set the path manually:
+
+```bash
+# macOS
+DYLD_LIBRARY_PATH="${PWD}/cgal" go test -v
+
+# Linux
+LD_LIBRARY_PATH="${PWD}/cgal" go test -v
+```
+
+### Running Applications
+
+When running the level editor or any code that uses this package:
+
+```bash
+# From project root
+./run.sh level levels/test.yaml
+```
+
+See `../RUNNING.md` for detailed information about library paths.

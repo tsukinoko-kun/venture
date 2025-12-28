@@ -16,7 +16,7 @@ type TestCase struct {
 // TestSimpleBox tests BSP collision with a simple rectangular box
 func TestSimpleBox(t *testing.T) {
 	// Define a simple 10x10 box centered at origin
-	// The box is solid (walls), and the interior is empty
+	// The box is a solid obstacle - points inside should collide
 	polygons := []Polygon{
 		{
 			Vertices: []Point{
@@ -25,7 +25,7 @@ func TestSimpleBox(t *testing.T) {
 				{X: 5, Y: 5},
 				{X: -5, Y: 5},
 			},
-			IsSolid: true, // This is a solid wall
+			IsSolid: true, // This is a solid obstacle
 		},
 	}
 
@@ -36,9 +36,9 @@ func TestSimpleBox(t *testing.T) {
 	// Define test cases: points to test and their expected collision state
 	testCases := []TestCase{
 		{
-			Name:        "Point inside box (should be empty/non-solid)",
+			Name:        "Point inside box (should be solid)",
 			Point:       Point{X: 0, Y: 0},
-			ExpectSolid: false,
+			ExpectSolid: true,
 		},
 		{
 			Name:        "Point outside box - far right",
@@ -66,9 +66,9 @@ func TestSimpleBox(t *testing.T) {
 			ExpectSolid: true,
 		},
 		{
-			Name:        "Point near center-right",
+			Name:        "Point near center-right (inside)",
 			Point:       Point{X: 3, Y: 0},
-			ExpectSolid: false,
+			ExpectSolid: true,
 		},
 	}
 
@@ -80,23 +80,56 @@ func TestSimpleBox(t *testing.T) {
 
 // TestLShapedRoom tests a more complex L-shaped room
 func TestLShapedRoom(t *testing.T) {
-	// TODO: Define an L-shaped room with multiple polygons
-	// Example structure:
-	//   ┌──────┐
-	//   │      │
-	//   │    ┌─┘
-	//   │    │
-	//   └────┘
+	// L-shaped concave polygon
+	//   0,4 ---- 2,4
+	//     |       |
+	//     |   2,2 +
+	//     |       |
+	//   0,0 ---- 4,0
 	
 	polygons := []Polygon{
-		// TODO: Add polygon definitions for L-shaped room
+		{
+			Vertices: []Point{
+				{X: 0, Y: 0},
+				{X: 4, Y: 0},
+				{X: 4, Y: 2},
+				{X: 2, Y: 2},
+				{X: 2, Y: 4},
+				{X: 0, Y: 4},
+			},
+			IsSolid: true,
+		},
 	}
 
 	builder := NewBSPBuilder(polygons)
 	root := builder.Build()
 
 	testCases := []TestCase{
-		// TODO: Add test cases for L-shaped room
+		{
+			Name:        "Point in lower part of L",
+			Point:       Point{X: 1, Y: 1},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point in upper part of L",
+			Point:       Point{X: 1, Y: 3},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point in concave corner (outside)",
+			Point:       Point{X: 3, Y: 3},
+			ExpectSolid: false,
+		},
+		{
+			Name:        "Point far outside",
+			Point:       Point{X: 10, Y: 10},
+			ExpectSolid: false,
+		},
+		{
+			Name:        "Point on outer edge",
+			Point:       Point{X: 0, Y: 2},
+			ExpectSolid: true,
+		},
 	}
 
 	runTestCases(t, root, testCases)
@@ -104,16 +137,54 @@ func TestLShapedRoom(t *testing.T) {
 
 // TestMultipleRooms tests multiple separate rooms
 func TestMultipleRooms(t *testing.T) {
-	// TODO: Define multiple separate rectangular rooms
+	// Two separate rectangular obstacles
 	polygons := []Polygon{
-		// TODO: Add polygon definitions
+		// First box at (0,0) to (2,2)
+		{
+			Vertices: []Point{
+				{X: 0, Y: 0},
+				{X: 2, Y: 0},
+				{X: 2, Y: 2},
+				{X: 0, Y: 2},
+			},
+			IsSolid: true,
+		},
+		// Second box at (5,5) to (7,7)
+		{
+			Vertices: []Point{
+				{X: 5, Y: 5},
+				{X: 7, Y: 5},
+				{X: 7, Y: 7},
+				{X: 5, Y: 7},
+			},
+			IsSolid: true,
+		},
 	}
 
 	builder := NewBSPBuilder(polygons)
 	root := builder.Build()
 
 	testCases := []TestCase{
-		// TODO: Add test cases
+		{
+			Name:        "Point in first box",
+			Point:       Point{X: 1, Y: 1},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point in second box",
+			Point:       Point{X: 6, Y: 6},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point between boxes",
+			Point:       Point{X: 3, Y: 3},
+			ExpectSolid: false,
+		},
+		{
+			Name:        "Point outside both boxes",
+			Point:       Point{X: 10, Y: 10},
+			ExpectSolid: false,
+		},
 	}
 
 	runTestCases(t, root, testCases)
@@ -121,16 +192,54 @@ func TestMultipleRooms(t *testing.T) {
 
 // TestNestedBoxes tests boxes within boxes
 func TestNestedBoxes(t *testing.T) {
-	// TODO: Define nested boxes (e.g., a room with a pillar in the middle)
+	// Large box with a smaller box inside (like a room with a pillar)
 	polygons := []Polygon{
-		// TODO: Add polygon definitions
+		// Outer box (10x10)
+		{
+			Vertices: []Point{
+				{X: 0, Y: 0},
+				{X: 10, Y: 0},
+				{X: 10, Y: 10},
+				{X: 0, Y: 10},
+			},
+			IsSolid: true,
+		},
+		// Inner box (2x2) - pillar in the center
+		{
+			Vertices: []Point{
+				{X: 4, Y: 4},
+				{X: 6, Y: 4},
+				{X: 6, Y: 6},
+				{X: 4, Y: 6},
+			},
+			IsSolid: true,
+		},
 	}
 
 	builder := NewBSPBuilder(polygons)
 	root := builder.Build()
 
 	testCases := []TestCase{
-		// TODO: Add test cases
+		{
+			Name:        "Point in outer box (not in inner)",
+			Point:       Point{X: 1, Y: 1},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point in inner box",
+			Point:       Point{X: 5, Y: 5},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point outside both boxes",
+			Point:       Point{X: 15, Y: 15},
+			ExpectSolid: false,
+		},
+		{
+			Name:        "Point between boxes",
+			Point:       Point{X: 2, Y: 5},
+			ExpectSolid: true,
+		},
 	}
 
 	runTestCases(t, root, testCases)
@@ -138,16 +247,45 @@ func TestNestedBoxes(t *testing.T) {
 
 // TestConvexPolygon tests a convex polygon (e.g., hexagon)
 func TestConvexPolygon(t *testing.T) {
-	// TODO: Define a convex polygon like a hexagon
+	// Regular hexagon centered at origin with radius ~5
 	polygons := []Polygon{
-		// TODO: Add polygon definitions
+		{
+			Vertices: []Point{
+				{X: 5, Y: 0},
+				{X: 2.5, Y: 4.33},
+				{X: -2.5, Y: 4.33},
+				{X: -5, Y: 0},
+				{X: -2.5, Y: -4.33},
+				{X: 2.5, Y: -4.33},
+			},
+			IsSolid: true,
+		},
 	}
 
 	builder := NewBSPBuilder(polygons)
 	root := builder.Build()
 
 	testCases := []TestCase{
-		// TODO: Add test cases
+		{
+			Name:        "Point at center",
+			Point:       Point{X: 0, Y: 0},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point inside near edge",
+			Point:       Point{X: 3, Y: 0},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point outside",
+			Point:       Point{X: 10, Y: 10},
+			ExpectSolid: false,
+		},
+		{
+			Name:        "Point on vertex",
+			Point:       Point{X: 5, Y: 0},
+			ExpectSolid: true,
+		},
 	}
 
 	runTestCases(t, root, testCases)
@@ -155,16 +293,53 @@ func TestConvexPolygon(t *testing.T) {
 
 // TestConcavePolygon tests a concave polygon (will need to be split)
 func TestConcavePolygon(t *testing.T) {
-	// TODO: Define a concave polygon (e.g., star shape or U-shape)
+	// Star-like concave polygon (CGAL will partition this into convex pieces)
+	// Simple U-shape
 	polygons := []Polygon{
-		// TODO: Add polygon definitions
+		{
+			Vertices: []Point{
+				{X: 0, Y: 0},
+				{X: 0, Y: 4},
+				{X: 2, Y: 4},
+				{X: 2, Y: 1},
+				{X: 4, Y: 1},
+				{X: 4, Y: 4},
+				{X: 6, Y: 4},
+				{X: 6, Y: 0},
+			},
+			IsSolid: true,
+		},
 	}
 
 	builder := NewBSPBuilder(polygons)
 	root := builder.Build()
 
 	testCases := []TestCase{
-		// TODO: Add test cases
+		{
+			Name:        "Point in left arm of U",
+			Point:       Point{X: 1, Y: 2},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point in right arm of U",
+			Point:       Point{X: 5, Y: 2},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point in the U gap (concave part)",
+			Point:       Point{X: 3, Y: 2},
+			ExpectSolid: false,
+		},
+		{
+			Name:        "Point in bottom connecting part",
+			Point:       Point{X: 3, Y: 0.5},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point outside",
+			Point:       Point{X: 10, Y: 10},
+			ExpectSolid: false,
+		},
 	}
 
 	runTestCases(t, root, testCases)
@@ -172,14 +347,28 @@ func TestConcavePolygon(t *testing.T) {
 
 // TestEmptySpace tests behavior with no geometry
 func TestEmptySpace(t *testing.T) {
-	// TODO: Test with no polygons or all non-solid polygons
+	// No polygons - entire space should be non-solid
 	polygons := []Polygon{}
 
 	builder := NewBSPBuilder(polygons)
 	root := builder.Build()
 
 	testCases := []TestCase{
-		// TODO: Add test cases
+		{
+			Name:        "Point at origin",
+			Point:       Point{X: 0, Y: 0},
+			ExpectSolid: false,
+		},
+		{
+			Name:        "Point anywhere",
+			Point:       Point{X: 100, Y: 100},
+			ExpectSolid: false,
+		},
+		{
+			Name:        "Negative coordinates",
+			Point:       Point{X: -50, Y: -50},
+			ExpectSolid: false,
+		},
 	}
 
 	runTestCases(t, root, testCases)
@@ -187,16 +376,70 @@ func TestEmptySpace(t *testing.T) {
 
 // TestCorridors tests narrow corridors between rooms
 func TestCorridors(t *testing.T) {
-	// TODO: Define rooms connected by narrow corridors
+	// Three boxes forming a corridor pattern
+	// [Box1] - (corridor) - [Box2]
 	polygons := []Polygon{
-		// TODO: Add polygon definitions
+		// Left box
+		{
+			Vertices: []Point{
+				{X: 0, Y: 0},
+				{X: 2, Y: 0},
+				{X: 2, Y: 2},
+				{X: 0, Y: 2},
+			},
+			IsSolid: true,
+		},
+		// Horizontal corridor
+		{
+			Vertices: []Point{
+				{X: 2, Y: 0.5},
+				{X: 4, Y: 0.5},
+				{X: 4, Y: 1.5},
+				{X: 2, Y: 1.5},
+			},
+			IsSolid: true,
+		},
+		// Right box
+		{
+			Vertices: []Point{
+				{X: 4, Y: 0},
+				{X: 6, Y: 0},
+				{X: 6, Y: 2},
+				{X: 4, Y: 2},
+			},
+			IsSolid: true,
+		},
 	}
 
 	builder := NewBSPBuilder(polygons)
 	root := builder.Build()
 
 	testCases := []TestCase{
-		// TODO: Add test cases
+		{
+			Name:        "Point in left box",
+			Point:       Point{X: 1, Y: 1},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point in corridor",
+			Point:       Point{X: 3, Y: 1},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point in right box",
+			Point:       Point{X: 5, Y: 1},
+			ExpectSolid: true,
+		},
+		{
+			Name:        "Point outside above corridor",
+			Point:       Point{X: 3, Y: 3},
+			ExpectSolid: false,
+		},
+		{
+			Name:        "Point below corridor entrance",
+			Point:       Point{X: 3, Y: 0.2},
+			ExpectSolid: false,
+		},
 	}
 
 	runTestCases(t, root, testCases)
