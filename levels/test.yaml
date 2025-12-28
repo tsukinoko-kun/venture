@@ -128,6 +128,35 @@ ground:
         "y": 1
       texture: Dirt_02-256x256.qoi
 objects: []
-collisions: []
+collisions:
+    - outline:
+        - x: -2
+          "y": -1
+        - x: -2
+          "y": -7
+        - x: -1
+          "y": -7
+        - x: -1
+          "y": -6
+        - x: 0
+          "y": -6
+        - x: -0
+          "y": -5
+        - x: 1
+          "y": -5
+        - x: 1
+          "y": -4
+        - x: 2
+          "y": -4
+        - x: 2
+          "y": -1
+        - x: 3
+          "y": -1
+        - x: 3
+          "y": 2
+        - x: -3
+          "y": 2
+        - x: -3
+          "y": -1
 spawns: {}
 portals: []

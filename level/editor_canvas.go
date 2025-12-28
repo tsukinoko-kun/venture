@@ -3,6 +3,7 @@ package level
 import (
 	"image"
 	"image/color"
+	"log"
 	"math"
 
 	"gioui.org/f32"
@@ -85,8 +86,11 @@ func (e *Editor) handleCanvasInput(gtx layout.Context) {
 							e.placeTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
 						}
 					} else if e.currentTool == "collision" {
-						// If moving mode is active, find the nearest point
-						if e.isMoving {
+						// If deleting mode is active, delete the nearest point
+						if e.isDeleting {
+							e.deleteCollisionPoint(gtx, ev.Position.X, ev.Position.Y)
+						} else if e.isMoving {
+							// If moving mode is active, find the nearest point
 							e.startMovingPoint(gtx, ev.Position.X, ev.Position.Y)
 						} else {
 							e.addCollisionPoint(gtx, ev.Position.X, ev.Position.Y)
@@ -334,14 +338,28 @@ func (e *Editor) addCollisionPoint(gtx layout.Context, mouseX, mouseY float32) {
 	centerX := canvasWidth / 2.0
 	centerY := canvasHeight / 2.0
 
-	// Calculate world position (not snapped to grid)
-	worldX := (mouseX - centerX - e.viewOffsetX) / e.zoom
-	worldY := (mouseY - centerY - e.viewOffsetY) / e.zoom
+	// Calculate world position (1 unit = 1 tile = gridCellSize pixels)
+	cellSize := e.gridCellSize * e.zoom
+	worldX := (mouseX - centerX - e.viewOffsetX) / cellSize
+	worldY := (mouseY - centerY - e.viewOffsetY) / cellSize
+
+	// Snap to 0.125 grid
+	originalX := worldX
+	originalY := worldY
+	worldX = snapToGrid(worldX, 0.125)
+	worldY = snapToGrid(worldY, 0.125)
+
+	log.Printf("Adding point: original=(%.6f, %.6f), snapped=(%.6f, %.6f)", originalX, originalY, worldX, worldY)
 
 	// Add the point to the first (active) collision polygon
 	point := Vec2{X: worldX, Y: worldY}
 	e.level.Collisions[0].Outline = append(e.level.Collisions[0].Outline, point)
 	e.dirty = true
+}
+
+// snapToGrid snaps a coordinate to the nearest grid point
+func snapToGrid(value float32, gridSize float32) float32 {
+	return float32(math.Round(float64(value/gridSize))) * gridSize
 }
 
 // startMovingPoint finds the nearest point to the mouse and starts moving it
@@ -350,6 +368,7 @@ func (e *Editor) startMovingPoint(gtx layout.Context, mouseX, mouseY float32) {
 	canvasHeight := float32(gtx.Constraints.Max.Y)
 	centerX := canvasWidth / 2.0
 	centerY := canvasHeight / 2.0
+	cellSize := e.gridCellSize * e.zoom
 
 	// Find the nearest point within a threshold distance
 	const clickThreshold = 15.0 // pixels
@@ -359,9 +378,9 @@ func (e *Editor) startMovingPoint(gtx layout.Context, mouseX, mouseY float32) {
 
 	for polyIdx, polygon := range e.level.Collisions {
 		for pointIdx, point := range polygon.Outline {
-			// Convert world coordinates to screen coordinates
-			screenX := centerX + e.viewOffsetX + point.X*e.zoom
-			screenY := centerY + e.viewOffsetY + point.Y*e.zoom
+			// Convert world coordinates to screen coordinates (1 unit = 1 tile)
+			screenX := centerX + e.viewOffsetX + point.X*cellSize
+			screenY := centerY + e.viewOffsetY + point.Y*cellSize
 
 			// Calculate distance from mouse to point
 			dx := screenX - mouseX
@@ -393,18 +412,73 @@ func (e *Editor) movePoint(gtx layout.Context, mouseX, mouseY float32) {
 		return
 	}
 
-	// Convert screen coordinates to world coordinates
+	// Convert screen coordinates to world coordinates (1 unit = 1 tile)
 	canvasWidth := float32(gtx.Constraints.Max.X)
 	canvasHeight := float32(gtx.Constraints.Max.Y)
 	centerX := canvasWidth / 2.0
 	centerY := canvasHeight / 2.0
+	cellSize := e.gridCellSize * e.zoom
 
-	worldX := (mouseX - centerX - e.viewOffsetX) / e.zoom
-	worldY := (mouseY - centerY - e.viewOffsetY) / e.zoom
+	worldX := (mouseX - centerX - e.viewOffsetX) / cellSize
+	worldY := (mouseY - centerY - e.viewOffsetY) / cellSize
+
+	// Snap to 0.125 grid
+	worldX = snapToGrid(worldX, 0.125)
+	worldY = snapToGrid(worldY, 0.125)
 
 	// Update the point position
 	e.level.Collisions[e.movingPointPolygonIndex].Outline[e.movingPointIndex] = Vec2{X: worldX, Y: worldY}
 	e.dirty = true
+}
+
+// deleteCollisionPoint finds and deletes the nearest collision point to the mouse
+func (e *Editor) deleteCollisionPoint(gtx layout.Context, mouseX, mouseY float32) {
+	canvasWidth := float32(gtx.Constraints.Max.X)
+	canvasHeight := float32(gtx.Constraints.Max.Y)
+	centerX := canvasWidth / 2.0
+	centerY := canvasHeight / 2.0
+	cellSize := e.gridCellSize * e.zoom
+
+	// Find the nearest point within a threshold distance
+	const clickThreshold = 15.0 // pixels
+	minDist := float32(clickThreshold)
+	foundPolygonIndex := -1
+	foundPointIndex := -1
+
+	for polyIdx, polygon := range e.level.Collisions {
+		for pointIdx, point := range polygon.Outline {
+			// Convert world coordinates to screen coordinates (1 unit = 1 tile)
+			screenX := centerX + e.viewOffsetX + point.X*cellSize
+			screenY := centerY + e.viewOffsetY + point.Y*cellSize
+
+			// Calculate distance from mouse to point
+			dx := screenX - mouseX
+			dy := screenY - mouseY
+			dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+
+			if dist < minDist {
+				minDist = dist
+				foundPolygonIndex = polyIdx
+				foundPointIndex = pointIdx
+			}
+		}
+	}
+
+	// If we found a point, delete it
+	if foundPolygonIndex >= 0 && foundPointIndex >= 0 {
+		polygon := &e.level.Collisions[foundPolygonIndex]
+
+		// Remove the point by slicing
+		polygon.Outline = append(polygon.Outline[:foundPointIndex], polygon.Outline[foundPointIndex+1:]...)
+
+		// If the polygon is now empty, remove it
+		if len(polygon.Outline) == 0 {
+			e.level.Collisions = append(e.level.Collisions[:foundPolygonIndex], e.level.Collisions[foundPolygonIndex+1:]...)
+		}
+
+		e.dirty = true
+		log.Printf("Deleted collision point at polygon %d, point %d", foundPolygonIndex, foundPointIndex)
+	}
 }
 
 // drawCollisionPolygons draws all collision polygons and their points
@@ -427,6 +501,8 @@ func (e *Editor) drawCollisionPolygons(gtx layout.Context) {
 
 // drawCollisionPolygon draws a single collision polygon and its points
 func (e *Editor) drawCollisionPolygon(gtx layout.Context, polygon Polygon, centerX, centerY float32) {
+	cellSize := e.gridCellSize * e.zoom
+
 	// Fill the polygon if we have at least 3 points
 	if len(polygon.Outline) >= 3 {
 		var path clip.Path
@@ -434,15 +510,15 @@ func (e *Editor) drawCollisionPolygon(gtx layout.Context, polygon Polygon, cente
 
 		// Move to the first point
 		p0 := polygon.Outline[0]
-		screenX := centerX + e.viewOffsetX + p0.X*e.zoom
-		screenY := centerY + e.viewOffsetY + p0.Y*e.zoom
+		screenX := centerX + e.viewOffsetX + p0.X*cellSize
+		screenY := centerY + e.viewOffsetY + p0.Y*cellSize
 		path.MoveTo(f32.Point{X: screenX, Y: screenY})
 
 		// Draw lines to all other points
 		for i := 1; i < len(polygon.Outline); i++ {
 			p := polygon.Outline[i]
-			screenX := centerX + e.viewOffsetX + p.X*e.zoom
-			screenY := centerY + e.viewOffsetY + p.Y*e.zoom
+			screenX := centerX + e.viewOffsetX + p.X*cellSize
+			screenY := centerY + e.viewOffsetY + p.Y*cellSize
 			path.LineTo(f32.Point{X: screenX, Y: screenY})
 		}
 
@@ -463,11 +539,11 @@ func (e *Editor) drawCollisionPolygon(gtx layout.Context, polygon Polygon, cente
 			p1 := polygon.Outline[i]
 			p2 := polygon.Outline[i+1]
 
-			// Convert world coordinates to screen coordinates
-			screenX1 := centerX + e.viewOffsetX + p1.X*e.zoom
-			screenY1 := centerY + e.viewOffsetY + p1.Y*e.zoom
-			screenX2 := centerX + e.viewOffsetX + p2.X*e.zoom
-			screenY2 := centerY + e.viewOffsetY + p2.Y*e.zoom
+			// Convert world coordinates to screen coordinates (1 unit = 1 tile)
+			screenX1 := centerX + e.viewOffsetX + p1.X*cellSize
+			screenY1 := centerY + e.viewOffsetY + p1.Y*cellSize
+			screenX2 := centerX + e.viewOffsetX + p2.X*cellSize
+			screenY2 := centerY + e.viewOffsetY + p2.Y*cellSize
 
 			// Draw a line between the two points
 			e.drawLine(gtx, screenX1, screenY1, screenX2, screenY2, 2.0, color.NRGBA{R: 100, G: 200, B: 255, A: 200})
@@ -477,19 +553,19 @@ func (e *Editor) drawCollisionPolygon(gtx layout.Context, polygon Polygon, cente
 		pFirst := polygon.Outline[0]
 		pLast := polygon.Outline[len(polygon.Outline)-1]
 
-		screenX1 := centerX + e.viewOffsetX + pLast.X*e.zoom
-		screenY1 := centerY + e.viewOffsetY + pLast.Y*e.zoom
-		screenX2 := centerX + e.viewOffsetX + pFirst.X*e.zoom
-		screenY2 := centerY + e.viewOffsetY + pFirst.Y*e.zoom
+		screenX1 := centerX + e.viewOffsetX + pLast.X*cellSize
+		screenY1 := centerY + e.viewOffsetY + pLast.Y*cellSize
+		screenX2 := centerX + e.viewOffsetX + pFirst.X*cellSize
+		screenY2 := centerY + e.viewOffsetY + pFirst.Y*cellSize
 
 		e.drawLine(gtx, screenX1, screenY1, screenX2, screenY2, 2.0, color.NRGBA{R: 100, G: 200, B: 255, A: 200})
 	}
 
 	// Draw all points as circles (on top of lines)
 	for _, point := range polygon.Outline {
-		// Convert world coordinates to screen coordinates
-		screenX := centerX + e.viewOffsetX + point.X*e.zoom
-		screenY := centerY + e.viewOffsetY + point.Y*e.zoom
+		// Convert world coordinates to screen coordinates (1 unit = 1 tile)
+		screenX := centerX + e.viewOffsetX + point.X*cellSize
+		screenY := centerY + e.viewOffsetY + point.Y*cellSize
 
 		// Draw a circle at this point
 		e.drawCircle(gtx, screenX, screenY, 6.0, color.NRGBA{R: 100, G: 200, B: 255, A: 255})
