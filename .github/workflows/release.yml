@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*' # Trigger on version tags like v1.0.0, v2.1.3, etc.
+      - v*
 
 jobs:
   build-linux:
@@ -16,7 +16,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-mod-file: 'go.mod'
+          go-version-file: go.mod
           cache: true
 
       - name: Install CGAL and dependencies
@@ -67,14 +67,14 @@ jobs:
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/share/applications
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-          
+
           # Copy binary
           cp venture-linux-x86_64 AppDir/usr/bin/venture
-          
+
           # Copy icon (convert PNG if needed, or use as-is)
           cp venture.png AppDir/usr/share/icons/hicolor/256x256/apps/venture.png
           cp venture.png AppDir/venture.png
-          
+
           # Create .desktop file
           cat > AppDir/usr/share/applications/venture.desktop <<EOF
           [Desktop Entry]
@@ -86,7 +86,7 @@ jobs:
           Comment=Build tool for the Adventurer game engine
           Terminal=false
           EOF
-          
+
           # Create AppRun script
           cat > AppDir/AppRun <<'EOF'
           #!/bin/bash
@@ -95,7 +95,7 @@ jobs:
           exec "${HERE}/usr/bin/venture" "$@"
           EOF
           chmod +x AppDir/AppRun
-          
+
           # Copy desktop file to root for AppImage
           cp AppDir/usr/share/applications/venture.desktop AppDir/
 
@@ -125,7 +125,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-mod-file: 'go.mod'
+          go-version-file: go.mod
           cache: true
 
       - name: Install CGAL and dependencies
@@ -181,7 +181,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-mod-file: 'go.mod'
+          go-version-file: go.mod
           cache: true
 
       - name: Install go-winres for icon embedding
