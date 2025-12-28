@@ -42,8 +42,6 @@ type (
 	Polygon struct {
 		// Outline is a list of points that define the outer shape of a polygon.
 		Outline Outline `yaml:"outline"`
-		// Holes is a list of outlines where each outline is a hole in the polygon.
-		Holes []Outline `yaml:"holes,omitempty"`
 	}
 
 	Outline []Vec2

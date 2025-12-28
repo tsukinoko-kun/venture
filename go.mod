@@ -7,6 +7,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/xfmoulet/qoi v0.2.0
 	golang.org/x/exp/shiny v0.0.0-20251219203646-944ab1f22d93
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 )
 
