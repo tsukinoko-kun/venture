@@ -1,6 +1,7 @@
 package level
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"log"
@@ -60,6 +61,22 @@ func (e *Editor) Layout(gtx layout.Context) layout.Dimensions {
 		}
 	}
 
+	// Process keyboard events for Escape key (unselect polygon)
+	for {
+		ev, ok := gtx.Event(key.Filter{Name: key.NameEscape})
+		if !ok {
+			break
+		}
+
+		switch ev := ev.(type) {
+		case key.Event:
+			if ev.State == key.Press {
+				// Unselect the currently selected polygon
+				e.selectedPolygonIndex = -1
+			}
+		}
+	}
+
 	// Handle close dialog buttons
 	if e.closeSaveButton.Clicked(gtx) {
 		if err := e.Save(); err != nil {
@@ -94,6 +111,10 @@ func (e *Editor) Layout(gtx layout.Context) layout.Dimensions {
 				// Canvas
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return e.layoutCanvas(gtx)
+				}),
+				// Right bar (collision list)
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return e.layoutRightBar(gtx)
 				}),
 			)
 		}),
@@ -222,12 +243,6 @@ func (e *Editor) layoutLeftBar(gtx layout.Context) layout.Dimensions {
 									e.currentTool = "ground"
 								} else {
 									e.currentTool = "collision"
-									// Ensure at least one collision polygon exists
-									if len(e.level.Collisions) == 0 {
-										e.level.Collisions = append(e.level.Collisions, Polygon{
-											Outline: make([]Vec2, 0),
-										})
-									}
 								}
 							}
 
@@ -356,4 +371,97 @@ func (e *Editor) layoutCloseDialog(gtx layout.Context) layout.Dimensions {
 			},
 		)
 	})
+}
+
+// layoutRightBar renders the right sidebar with collision polygon list (only visible in collision tool mode)
+func (e *Editor) layoutRightBar(gtx layout.Context) layout.Dimensions {
+	// Only show the right bar if the current tool needs the collision list
+	if !e.currentToolNeedsCollisionList() {
+		// Return empty dimensions when collision list is not needed
+		return layout.Dimensions{}
+	}
+
+	gtx.Constraints.Min.X = gtx.Dp(unit.Dp(200))
+	gtx.Constraints.Max.X = gtx.Constraints.Min.X
+
+	return layout.Background{}.Layout(gtx,
+		func(gtx layout.Context) layout.Dimensions {
+			defer clip.Rect{Max: gtx.Constraints.Min}.Push(gtx.Ops).Pop()
+			paint.ColorOp{Color: color.NRGBA{R: 50, G: 50, B: 50, A: 255}}.Add(gtx.Ops)
+			paint.PaintOp{}.Add(gtx.Ops)
+			return layout.Dimensions{Size: gtx.Constraints.Min}
+		},
+		func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{
+				Axis: layout.Vertical,
+			}.Layout(gtx,
+				// Header
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						label := material.H6(e.theme, "Collision Polygons")
+						label.Color = color.NRGBA{R: 220, G: 220, B: 220, A: 255}
+						return label.Layout(gtx)
+					})
+				}),
+				// Collision polygon list
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					numPolygons := len(e.level.Collisions)
+
+					// Ensure we have enough clickable widgets for all polygons
+					for len(e.collisionButtons) < numPolygons {
+						e.collisionButtons = append(e.collisionButtons, widget.Clickable{})
+					}
+
+					return material.List(e.theme, &e.collisionList).Layout(gtx, numPolygons, func(gtx layout.Context, index int) layout.Dimensions {
+						return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							// Handle button clicks
+							if e.collisionButtons[index].Clicked(gtx) {
+								e.selectedPolygonIndex = index
+							}
+
+							polygonName := fmt.Sprintf("Polygon %d", index+1)
+
+							// Create button
+							button := material.Button(e.theme, &e.collisionButtons[index], polygonName)
+
+							// Highlight the selected polygon
+							if index == e.selectedPolygonIndex {
+								button.Background = color.NRGBA{R: 80, G: 140, B: 200, A: 255}
+							} else {
+								button.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 255}
+							}
+							button.Color = color.NRGBA{R: 220, G: 220, B: 220, A: 255}
+
+							return button.Layout(gtx)
+						})
+					})
+				}),
+				// New Polygon button
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						// Handle button click
+						if e.newPolygonButton.Clicked(gtx) {
+							// Create a new empty polygon
+							newPolygon := Polygon{
+								Outline: make([]Vec2, 0),
+							}
+							e.level.Collisions = append(e.level.Collisions, newPolygon)
+							// Select the newly created polygon
+							e.selectedPolygonIndex = len(e.level.Collisions) - 1
+							// Mark as dirty
+							e.dirty = true
+							log.Printf("Created new polygon at index %d", e.selectedPolygonIndex)
+						}
+
+						// Create button with blue background
+						button := material.Button(e.theme, &e.newPolygonButton, "+ New Polygon")
+						button.Background = color.NRGBA{R: 60, G: 120, B: 200, A: 255}
+						button.Color = color.NRGBA{R: 220, G: 220, B: 220, A: 255}
+
+						return button.Layout(gtx)
+					})
+				}),
+			)
+		},
+	)
 }

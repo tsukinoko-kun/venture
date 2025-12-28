@@ -62,6 +62,12 @@ type Editor struct {
 	currentTool     string           // currently active tool ("ground" or "collision")
 	groundButton    widget.Clickable // button to activate ground tool
 	collisionButton widget.Clickable // button to activate collision tool
+
+	// Collision tool UI
+	collisionList        widget.List        // list widget for collision polygons
+	collisionButtons     []widget.Clickable // clickable widgets for each polygon in the list
+	selectedPolygonIndex int                // index of the currently selected polygon (-1 = none)
+	newPolygonButton     widget.Clickable   // button to create a new polygon
 }
 
 // NewEditor creates a new level editor instance
@@ -110,6 +116,14 @@ func NewEditor(theme *material.Theme, levelFilePath, assetsDir string, level *Le
 		currentTool:             "ground", // Start with ground tool active
 		movingPointPolygonIndex: -1,       // No point being moved initially
 		movingPointIndex:        -1,       // No point being moved initially
+		selectedPolygonIndex:    -1,       // No polygon selected initially
+		// Collision list
+		collisionList: widget.List{
+			List: layout.List{
+				Axis: layout.Vertical,
+			},
+		},
+		collisionButtons: []widget.Clickable{},
 	}
 }
 
@@ -159,4 +173,9 @@ func (e *Editor) ShouldClose() bool {
 // currentToolNeedsAssetView returns true if the current tool requires the asset view
 func (e *Editor) currentToolNeedsAssetView() bool {
 	return e.currentTool == "ground"
+}
+
+// currentToolNeedsCollisionList returns true if the current tool requires the collision list view
+func (e *Editor) currentToolNeedsCollisionList() bool {
+	return e.currentTool == "collision"
 }

@@ -86,13 +86,23 @@ func (e *Editor) handleCanvasInput(gtx layout.Context) {
 							e.placeTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
 						}
 					} else if e.currentTool == "collision" {
-						// If deleting mode is active, delete the nearest point
+						// If deleting mode is active
 						if e.isDeleting {
-							e.deleteCollisionPoint(gtx, ev.Position.X, ev.Position.Y)
+							// If no polygon is selected, delete the entire polygon we clicked inside
+							if e.selectedPolygonIndex < 0 {
+								e.deletePolygonAtPosition(gtx, ev.Position.X, ev.Position.Y)
+							} else {
+								// Otherwise delete the nearest point in the selected polygon
+								e.deleteCollisionPoint(gtx, ev.Position.X, ev.Position.Y)
+							}
 						} else if e.isMoving {
 							// If moving mode is active, find the nearest point
 							e.startMovingPoint(gtx, ev.Position.X, ev.Position.Y)
+						} else if e.selectedPolygonIndex < 0 {
+							// If no polygon is selected, try to select one by clicking inside it
+							e.selectPolygonAtPosition(gtx, ev.Position.X, ev.Position.Y)
 						} else {
+							// Otherwise add a point to the selected polygon
 							e.addCollisionPoint(gtx, ev.Position.X, ev.Position.Y)
 						}
 					}
@@ -323,13 +333,12 @@ func (e *Editor) drawPlacedTiles(gtx layout.Context, centerX, centerY, cellSize 
 	}
 }
 
-// addCollisionPoint adds a new point to the current collision polygon
+// addCollisionPoint adds a new point to the currently selected collision polygon
 func (e *Editor) addCollisionPoint(gtx layout.Context, mouseX, mouseY float32) {
-	// Ensure we have at least one collision polygon
-	if len(e.level.Collisions) == 0 {
-		e.level.Collisions = append(e.level.Collisions, Polygon{
-			Outline: make([]Vec2, 0),
-		})
+	// Check if a polygon is selected
+	if e.selectedPolygonIndex < 0 || e.selectedPolygonIndex >= len(e.level.Collisions) {
+		// No valid polygon selected, do nothing
+		return
 	}
 
 	// Convert screen coordinates to world coordinates
@@ -351,9 +360,9 @@ func (e *Editor) addCollisionPoint(gtx layout.Context, mouseX, mouseY float32) {
 
 	log.Printf("Adding point: original=(%.6f, %.6f), snapped=(%.6f, %.6f)", originalX, originalY, worldX, worldY)
 
-	// Add the point to the first (active) collision polygon
+	// Add the point to the selected collision polygon
 	point := Vec2{X: worldX, Y: worldY}
-	e.level.Collisions[0].Outline = append(e.level.Collisions[0].Outline, point)
+	e.level.Collisions[e.selectedPolygonIndex].Outline = append(e.level.Collisions[e.selectedPolygonIndex].Outline, point)
 	e.dirty = true
 }
 
@@ -362,42 +371,45 @@ func snapToGrid(value float32, gridSize float32) float32 {
 	return float32(math.Round(float64(value/gridSize))) * gridSize
 }
 
-// startMovingPoint finds the nearest point to the mouse and starts moving it
+// startMovingPoint finds the nearest point to the mouse in the selected polygon and starts moving it
 func (e *Editor) startMovingPoint(gtx layout.Context, mouseX, mouseY float32) {
+	// Check if a polygon is selected
+	if e.selectedPolygonIndex < 0 || e.selectedPolygonIndex >= len(e.level.Collisions) {
+		// No valid polygon selected, do nothing
+		return
+	}
+
 	canvasWidth := float32(gtx.Constraints.Max.X)
 	canvasHeight := float32(gtx.Constraints.Max.Y)
 	centerX := canvasWidth / 2.0
 	centerY := canvasHeight / 2.0
 	cellSize := e.gridCellSize * e.zoom
 
-	// Find the nearest point within a threshold distance
+	// Find the nearest point within a threshold distance (only in selected polygon)
 	const clickThreshold = 15.0 // pixels
 	minDist := float32(clickThreshold)
-	foundPolygonIndex := -1
 	foundPointIndex := -1
 
-	for polyIdx, polygon := range e.level.Collisions {
-		for pointIdx, point := range polygon.Outline {
-			// Convert world coordinates to screen coordinates (1 unit = 1 tile)
-			screenX := centerX + e.viewOffsetX + point.X*cellSize
-			screenY := centerY + e.viewOffsetY + point.Y*cellSize
+	polygon := e.level.Collisions[e.selectedPolygonIndex]
+	for pointIdx, point := range polygon.Outline {
+		// Convert world coordinates to screen coordinates (1 unit = 1 tile)
+		screenX := centerX + e.viewOffsetX + point.X*cellSize
+		screenY := centerY + e.viewOffsetY + point.Y*cellSize
 
-			// Calculate distance from mouse to point
-			dx := screenX - mouseX
-			dy := screenY - mouseY
-			dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+		// Calculate distance from mouse to point
+		dx := screenX - mouseX
+		dy := screenY - mouseY
+		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
-			if dist < minDist {
-				minDist = dist
-				foundPolygonIndex = polyIdx
-				foundPointIndex = pointIdx
-			}
+		if dist < minDist {
+			minDist = dist
+			foundPointIndex = pointIdx
 		}
 	}
 
 	// If we found a point, start moving it
-	if foundPolygonIndex >= 0 && foundPointIndex >= 0 {
-		e.movingPointPolygonIndex = foundPolygonIndex
+	if foundPointIndex >= 0 {
+		e.movingPointPolygonIndex = e.selectedPolygonIndex
 		e.movingPointIndex = foundPointIndex
 	}
 }
@@ -431,53 +443,58 @@ func (e *Editor) movePoint(gtx layout.Context, mouseX, mouseY float32) {
 	e.dirty = true
 }
 
-// deleteCollisionPoint finds and deletes the nearest collision point to the mouse
+// deleteCollisionPoint finds and deletes the nearest collision point to the mouse in the selected polygon
 func (e *Editor) deleteCollisionPoint(gtx layout.Context, mouseX, mouseY float32) {
+	// Check if a polygon is selected
+	if e.selectedPolygonIndex < 0 || e.selectedPolygonIndex >= len(e.level.Collisions) {
+		// No valid polygon selected, do nothing
+		return
+	}
+
 	canvasWidth := float32(gtx.Constraints.Max.X)
 	canvasHeight := float32(gtx.Constraints.Max.Y)
 	centerX := canvasWidth / 2.0
 	centerY := canvasHeight / 2.0
 	cellSize := e.gridCellSize * e.zoom
 
-	// Find the nearest point within a threshold distance
+	// Find the nearest point within a threshold distance (only in selected polygon)
 	const clickThreshold = 15.0 // pixels
 	minDist := float32(clickThreshold)
-	foundPolygonIndex := -1
 	foundPointIndex := -1
 
-	for polyIdx, polygon := range e.level.Collisions {
-		for pointIdx, point := range polygon.Outline {
-			// Convert world coordinates to screen coordinates (1 unit = 1 tile)
-			screenX := centerX + e.viewOffsetX + point.X*cellSize
-			screenY := centerY + e.viewOffsetY + point.Y*cellSize
+	polygon := e.level.Collisions[e.selectedPolygonIndex]
+	for pointIdx, point := range polygon.Outline {
+		// Convert world coordinates to screen coordinates (1 unit = 1 tile)
+		screenX := centerX + e.viewOffsetX + point.X*cellSize
+		screenY := centerY + e.viewOffsetY + point.Y*cellSize
 
-			// Calculate distance from mouse to point
-			dx := screenX - mouseX
-			dy := screenY - mouseY
-			dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+		// Calculate distance from mouse to point
+		dx := screenX - mouseX
+		dy := screenY - mouseY
+		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
-			if dist < minDist {
-				minDist = dist
-				foundPolygonIndex = polyIdx
-				foundPointIndex = pointIdx
-			}
+		if dist < minDist {
+			minDist = dist
+			foundPointIndex = pointIdx
 		}
 	}
 
 	// If we found a point, delete it
-	if foundPolygonIndex >= 0 && foundPointIndex >= 0 {
-		polygon := &e.level.Collisions[foundPolygonIndex]
+	if foundPointIndex >= 0 {
+		polygon := &e.level.Collisions[e.selectedPolygonIndex]
 
 		// Remove the point by slicing
 		polygon.Outline = append(polygon.Outline[:foundPointIndex], polygon.Outline[foundPointIndex+1:]...)
 
 		// If the polygon is now empty, remove it
 		if len(polygon.Outline) == 0 {
-			e.level.Collisions = append(e.level.Collisions[:foundPolygonIndex], e.level.Collisions[foundPolygonIndex+1:]...)
+			e.level.Collisions = append(e.level.Collisions[:e.selectedPolygonIndex], e.level.Collisions[e.selectedPolygonIndex+1:]...)
+			// Clear the selection since the polygon was deleted
+			e.selectedPolygonIndex = -1
 		}
 
 		e.dirty = true
-		log.Printf("Deleted collision point at polygon %d, point %d", foundPolygonIndex, foundPointIndex)
+		log.Printf("Deleted collision point at polygon %d, point %d", e.selectedPolygonIndex, foundPointIndex)
 	}
 }
 
@@ -619,4 +636,77 @@ func (e *Editor) drawLine(gtx layout.Context, x1, y1, x2, y2, width float32, col
 	defer stroke.Push(gtx.Ops).Pop()
 	paint.ColorOp{Color: col}.Add(gtx.Ops)
 	paint.PaintOp{}.Add(gtx.Ops)
+}
+
+// selectPolygonAtPosition selects a polygon if the click position is inside it
+func (e *Editor) selectPolygonAtPosition(gtx layout.Context, mouseX, mouseY float32) {
+	// Convert screen coordinates to world coordinates
+	canvasWidth := float32(gtx.Constraints.Max.X)
+	canvasHeight := float32(gtx.Constraints.Max.Y)
+	centerX := canvasWidth / 2.0
+	centerY := canvasHeight / 2.0
+	cellSize := e.gridCellSize * e.zoom
+
+	worldX := (mouseX - centerX - e.viewOffsetX) / cellSize
+	worldY := (mouseY - centerY - e.viewOffsetY) / cellSize
+
+	// Check each polygon to see if the point is inside
+	// Check in reverse order so topmost polygons are selected first
+	for i := len(e.level.Collisions) - 1; i >= 0; i-- {
+		polygon := e.level.Collisions[i]
+		if len(polygon.Outline) >= 3 && isPointInPolygon(worldX, worldY, polygon.Outline) {
+			e.selectedPolygonIndex = i
+			log.Printf("Selected polygon %d", i)
+			return
+		}
+	}
+}
+
+// isPointInPolygon uses the ray casting algorithm to determine if a point is inside a polygon
+func isPointInPolygon(x, y float32, polygon []Vec2) bool {
+	if len(polygon) < 3 {
+		return false
+	}
+
+	inside := false
+	j := len(polygon) - 1
+
+	for i := 0; i < len(polygon); i++ {
+		xi, yi := polygon[i].X, polygon[i].Y
+		xj, yj := polygon[j].X, polygon[j].Y
+
+		// Ray casting algorithm
+		if ((yi > y) != (yj > y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi) {
+			inside = !inside
+		}
+		j = i
+	}
+
+	return inside
+}
+
+// deletePolygonAtPosition deletes an entire polygon if the click position is inside it
+func (e *Editor) deletePolygonAtPosition(gtx layout.Context, mouseX, mouseY float32) {
+	// Convert screen coordinates to world coordinates
+	canvasWidth := float32(gtx.Constraints.Max.X)
+	canvasHeight := float32(gtx.Constraints.Max.Y)
+	centerX := canvasWidth / 2.0
+	centerY := canvasHeight / 2.0
+	cellSize := e.gridCellSize * e.zoom
+
+	worldX := (mouseX - centerX - e.viewOffsetX) / cellSize
+	worldY := (mouseY - centerY - e.viewOffsetY) / cellSize
+
+	// Check each polygon to see if the point is inside
+	// Check in reverse order so topmost polygons are deleted first
+	for i := len(e.level.Collisions) - 1; i >= 0; i-- {
+		polygon := e.level.Collisions[i]
+		if len(polygon.Outline) >= 3 && isPointInPolygon(worldX, worldY, polygon.Outline) {
+			// Delete the polygon
+			e.level.Collisions = append(e.level.Collisions[:i], e.level.Collisions[i+1:]...)
+			e.dirty = true
+			log.Printf("Deleted entire polygon %d", i)
+			return
+		}
+	}
 }
