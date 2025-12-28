@@ -2,9 +2,10 @@ package bsp
 
 /*
 #cgo CXXFLAGS: -std=c++17 -I${SRCDIR}/cgal
-#cgo darwin LDFLAGS: ${SRCDIR}/cgal/libpartition.a -L/opt/homebrew/lib -lgmp -lc++
-#cgo linux LDFLAGS: ${SRCDIR}/cgal/libpartition.a -lgmp -lstdc++
-#cgo windows LDFLAGS: ${SRCDIR}/cgal/libpartition.a -lgmp -lstdc++
+#cgo darwin,arm64 LDFLAGS: ${SRCDIR}/cgal/libpartition.a /opt/homebrew/opt/gmp/lib/libgmp.a -lc++
+#cgo darwin,amd64 LDFLAGS: ${SRCDIR}/cgal/libpartition.a /usr/local/opt/gmp/lib/libgmp.a -lc++
+#cgo linux LDFLAGS: ${SRCDIR}/cgal/libpartition.a -l:libgmp.a -lstdc++
+#cgo windows LDFLAGS: ${SRCDIR}/cgal/libpartition.a -l:libgmp.a -lstdc++
 #include "cgal/partition.h"
 #include <stdlib.h>
 */
