@@ -255,6 +255,12 @@ func (e *Editor) layoutLeftBar(gtx layout.Context) layout.Dimensions {
 
 // layoutBottomBar renders the bottom panel with folder and asset lists
 func (e *Editor) layoutBottomBar(gtx layout.Context) layout.Dimensions {
+	// Only show the bottom bar if the current tool needs the asset view
+	if !e.currentToolNeedsAssetView() {
+		// Return empty dimensions when asset view is not needed
+		return layout.Dimensions{}
+	}
+
 	gtx.Constraints.Min = gtx.Constraints.Max
 	gtx.Constraints.Min.Y = gtx.Dp(unit.Dp(200))
 	gtx.Constraints.Max.Y = gtx.Constraints.Min.Y

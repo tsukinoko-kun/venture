@@ -155,3 +155,8 @@ func (e *Editor) RequestClose() bool {
 func (e *Editor) ShouldClose() bool {
 	return e.shouldClose
 }
+
+// currentToolNeedsAssetView returns true if the current tool requires the asset view
+func (e *Editor) currentToolNeedsAssetView() bool {
+	return e.currentTool == "ground"
+}
