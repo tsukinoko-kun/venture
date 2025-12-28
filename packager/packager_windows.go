@@ -92,7 +92,7 @@ func findAndCopyWindowsDLLs(binaryPath, targetDir string) error {
 	// Common runtime DLLs that games might need (excluding system DLLs)
 	// In practice, most DLLs will be found next to the binary or in vendor folders
 	commonDLLs := []string{
-		"SDL2.dll",
+		"SDL3.dll",
 		"openal32.dll",
 		"OpenAL32.dll",
 		"libvorbis.dll",

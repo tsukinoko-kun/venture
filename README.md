@@ -122,7 +122,7 @@ venture build [--platform PLATFORM] [--debug] [--release]
   
 - **Windows**: Zip archive (`<binary_name>-windows_amd64.zip`)
   - Contains: `.exe` binary, `assets/`, and all required DLLs
-  - Automatically detects and includes common DLLs (SDL2, OpenAL, etc.)
+  - Automatically detects and includes common DLLs (SDL3, OpenAL, etc.)
 
 **Examples:**
 ```bash
@@ -233,7 +233,7 @@ Commands in `cmd/` orchestrate these packages in a declarative, high-level way.
 - Launch script sets `LD_LIBRARY_PATH` to `lib/` subdirectory
 
 ### Windows
-- Automatically searches for common DLLs (SDL2, OpenAL, etc.)
+- Automatically searches for common DLLs (SDL3, OpenAL, etc.)
 - Places all DLLs next to the `.exe` in the zip archive
 - Limited automatic dependency detection (may require manual DLL inclusion)
 
