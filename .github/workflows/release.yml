@@ -101,7 +101,9 @@ jobs:
 
       - name: Build AppImage
         run: |
-          ./appimagetool-x86_64.AppImage AppDir venture-linux-x86_64.AppImage
+          # Use --appimage-extract-and-run since FUSE isn't available in GitHub Actions
+          # Set ARCH to avoid architecture detection issues
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir venture-linux-x86_64.AppImage
 
       - name: Verify AppImage
         run: |
@@ -157,17 +159,43 @@ jobs:
   build-windows:
     name: Build Windows x64
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install rsrc for embedding resources
+        shell: bash
+        run: |
+          go install github.com/akavel/rsrc@latest
+
+      - name: Create Windows manifest
+        shell: bash
+        run: |
+          cat > VERSION.manifest <<EOF
+          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+            <assemblyIdentity version="1.0.0.0" processorArchitecture="amd64" name="Venture" type="win32"/>
+            <description>Build tool for the Adventurer game engine</description>
+          </assembly>
+          EOF
+
+      - name: Convert PNG to ICO and generate resource file
+        shell: bash
+        run: |
+          magick convert venture.png -define icon:auto-resize=256,128,64,48,32,16 venture.ico
+          ~/go/bin/rsrc -manifest VERSION.manifest -ico venture.ico -o resource.syso
 
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          path-type: inherit
           update: true
           install: >-
             mingw-w64-x86_64-gcc
@@ -178,33 +206,22 @@ jobs:
             mingw-w64-x86_64-pkg-config
             make
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Install go-winres for icon embedding
-        run: |
-          go install github.com/tc-hib/go-winres@latest
-
-      - name: Generate Windows resource file with icon
-        run: |
-          go-winres make --icon venture.png --arch amd64 --product-version ${{ github.ref_name }} --file-version ${{ github.ref_name }}
-
       - name: Build CGAL static library
+        shell: msys2 {0}
         run: |
           cd bsp/cgal
           make clean
           make static
 
       - name: Build Go binary
+        shell: msys2 {0}
         run: |
-          CGO_ENABLED=1 go build -o venture-windows-x64.exe .
+          CGO_ENABLED=1 go build -ldflags="-H windowsgui" -o venture-windows-x64.exe .
 
       - name: Verify binary
+        shell: bash
         run: |
-          file venture-windows-x64.exe
+          file venture-windows-x64.exe || true
           ldd venture-windows-x64.exe || true
 
       - name: Upload artifact
