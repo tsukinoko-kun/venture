@@ -52,6 +52,16 @@ type Editor struct {
 
 	// Keyboard state for canvas interaction
 	isDeleting bool // true when 'x' key is held down
+	isMoving   bool // true when 'm' key is held down
+
+	// Point moving state
+	movingPointPolygonIndex int // index of the polygon being edited (-1 = none)
+	movingPointIndex        int // index of the point being moved (-1 = none)
+
+	// Tool state
+	currentTool     string           // currently active tool ("ground" or "collision")
+	groundButton    widget.Clickable // button to activate ground tool
+	collisionButton widget.Clickable // button to activate collision tool
 }
 
 // NewEditor creates a new level editor instance
@@ -96,6 +106,10 @@ func NewEditor(theme *material.Theme, levelFilePath, assetsDir string, level *Le
 		viewOffsetX:  0.0,
 		viewOffsetY:  0.0,
 		zoom:         1.0,
+		// Tool defaults
+		currentTool:             "ground", // Start with ground tool active
+		movingPointPolygonIndex: -1,       // No point being moved initially
+		movingPointIndex:        -1,       // No point being moved initially
 	}
 }
 

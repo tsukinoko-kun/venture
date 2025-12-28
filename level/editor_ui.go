@@ -12,6 +12,7 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
+	"gioui.org/widget"
 	"gioui.org/widget/material"
 )
 
@@ -34,6 +35,27 @@ func (e *Editor) Layout(gtx layout.Context) layout.Dimensions {
 				e.isDeleting = true
 			case key.Release:
 				e.isDeleting = false
+			}
+		}
+	}
+
+	// Process keyboard events for move mode
+	for {
+		ev, ok := gtx.Event(key.Filter{Name: "M"})
+		if !ok {
+			break
+		}
+
+		switch ev := ev.(type) {
+		case key.Event:
+			switch ev.State {
+			case key.Press:
+				e.isMoving = true
+			case key.Release:
+				e.isMoving = false
+				// Stop moving any point when key is released
+				e.movingPointPolygonIndex = -1
+				e.movingPointIndex = -1
 			}
 		}
 	}
@@ -180,11 +202,49 @@ func (e *Editor) layoutLeftBar(gtx layout.Context) layout.Dimensions {
 				}),
 				// Tool list
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return material.List(e.theme, &e.toolList).Layout(gtx, 1, func(gtx layout.Context, index int) layout.Dimensions {
-						return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							label := material.Body1(e.theme, "Ground")
-							label.Color = color.NRGBA{R: 180, G: 180, B: 180, A: 255}
-							return label.Layout(gtx)
+					return material.List(e.theme, &e.toolList).Layout(gtx, 2, func(gtx layout.Context, index int) layout.Dimensions {
+						return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							var btn *material.ButtonStyle
+							var toolName string
+							var clickable *widget.Clickable
+
+							if index == 0 {
+								toolName = "Ground"
+								clickable = &e.groundButton
+							} else {
+								toolName = "Collision"
+								clickable = &e.collisionButton
+							}
+
+							// Handle button clicks
+							if clickable.Clicked(gtx) {
+								if index == 0 {
+									e.currentTool = "ground"
+								} else {
+									e.currentTool = "collision"
+									// Ensure at least one collision polygon exists
+									if len(e.level.Collisions) == 0 {
+										e.level.Collisions = append(e.level.Collisions, Polygon{
+											Outline: make([]Vec2, 0),
+										})
+									}
+								}
+							}
+
+							// Create button
+							button := material.Button(e.theme, clickable, toolName)
+
+							// Highlight the active tool
+							isActive := (index == 0 && e.currentTool == "ground") || (index == 1 && e.currentTool == "collision")
+							if isActive {
+								button.Background = color.NRGBA{R: 80, G: 140, B: 200, A: 255}
+							} else {
+								button.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 255}
+							}
+							button.Color = color.NRGBA{R: 220, G: 220, B: 220, A: 255}
+
+							btn = &button
+							return btn.Layout(gtx)
 						})
 					})
 				}),
