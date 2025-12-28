@@ -231,7 +231,6 @@ Commands in `cmd/` orchestrate these packages in a declarative, high-level way.
 - Requires `linuxdeploy` to analyze and bundle dependencies
 - Creates a directory bundle with `launch.sh` script
 - Launch script sets `LD_LIBRARY_PATH` to `lib/` subdirectory
-- Does NOT create AppImage (creates directory bundle instead)
 
 ### Windows
 - Automatically searches for common DLLs (SDL2, OpenAL, etc.)
