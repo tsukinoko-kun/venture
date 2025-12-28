@@ -6,6 +6,8 @@ import (
 	"log"
 	"path/filepath"
 
+	"gioui.org/io/event"
+	"gioui.org/io/key"
 	"gioui.org/layout"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
@@ -15,6 +17,27 @@ import (
 
 // Layout renders the entire editor UI
 func (e *Editor) Layout(gtx layout.Context) layout.Dimensions {
+	// Register for global keyboard events
+	event.Op(gtx.Ops, e)
+
+	// Process keyboard events for deletion mode
+	for {
+		ev, ok := gtx.Event(key.Filter{Name: "X"})
+		if !ok {
+			break
+		}
+
+		switch ev := ev.(type) {
+		case key.Event:
+			switch ev.State {
+			case key.Press:
+				e.isDeleting = true
+			case key.Release:
+				e.isDeleting = false
+			}
+		}
+	}
+
 	// Handle close dialog buttons
 	if e.closeSaveButton.Clicked(gtx) {
 		if err := e.Save(); err != nil {

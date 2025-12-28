@@ -65,9 +65,13 @@ func (e *Editor) handleCanvasInput(gtx layout.Context) {
 					e.lastMouseX = ev.Position.X
 					e.lastMouseY = ev.Position.Y
 				}
-				// Place texture on left mouse button press
+				// Place or delete tile on left mouse button press
 				if ev.Buttons == pointer.ButtonPrimary {
-					e.placeTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
+					if e.isDeleting {
+						e.deleteTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
+					} else {
+						e.placeTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
+					}
 				}
 
 			case pointer.Release:
@@ -86,9 +90,13 @@ func (e *Editor) handleCanvasInput(gtx layout.Context) {
 					e.lastMouseX = ev.Position.X
 					e.lastMouseY = ev.Position.Y
 				}
-				// Place texture while dragging with left mouse button
+				// Place or delete tile while dragging with left mouse button
 				if ev.Buttons == pointer.ButtonPrimary {
-					e.placeTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
+					if e.isDeleting {
+						e.deleteTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
+					} else {
+						e.placeTileAtPosition(gtx, ev.Position.X, ev.Position.Y)
+					}
 				}
 
 			case pointer.Scroll:
@@ -176,6 +184,35 @@ func (e *Editor) placeTileAtPosition(gtx layout.Context, mouseX, mouseY float32)
 		// Add new tile
 		e.level.Ground = append(e.level.Ground, newTile)
 		e.dirty = true // Mark as dirty when tile is added
+	}
+}
+
+// deleteTileAtPosition removes the tile at the grid position under the mouse
+func (e *Editor) deleteTileAtPosition(gtx layout.Context, mouseX, mouseY float32) {
+	// Convert screen coordinates to grid coordinates
+	canvasWidth := float32(gtx.Constraints.Max.X)
+	canvasHeight := float32(gtx.Constraints.Max.Y)
+	centerX := canvasWidth / 2.0
+	centerY := canvasHeight / 2.0
+
+	cellSize := e.gridCellSize * e.zoom
+
+	// Calculate grid position
+	worldX := mouseX - centerX - e.viewOffsetX
+	worldY := mouseY - centerY - e.viewOffsetY
+
+	gridX := int32(math.Floor(float64(worldX / cellSize)))
+	gridY := int32(math.Floor(float64(worldY / cellSize)))
+
+	// Find and remove the tile at this position
+	for i, tile := range e.level.Ground {
+		if tile.Position.X == gridX && tile.Position.Y == gridY {
+			// Remove tile by replacing it with the last element and truncating
+			e.level.Ground[i] = e.level.Ground[len(e.level.Ground)-1]
+			e.level.Ground = e.level.Ground[:len(e.level.Ground)-1]
+			e.dirty = true // Mark as dirty when tile is deleted
+			return
+		}
 	}
 }
 

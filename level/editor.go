@@ -49,6 +49,9 @@ type Editor struct {
 	isPanning  bool    // true when right mouse button is held down
 	lastMouseX float32 // last mouse X position for drag calculation
 	lastMouseY float32 // last mouse Y position for drag calculation
+
+	// Keyboard state for canvas interaction
+	isDeleting bool // true when 'x' key is held down
 }
 
 // NewEditor creates a new level editor instance
