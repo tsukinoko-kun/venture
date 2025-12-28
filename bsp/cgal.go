@@ -1,10 +1,13 @@
 package bsp
 
-// #cgo CXXFLAGS: -std=c++17 -I${SRCDIR}/cgal
-// #cgo darwin LDFLAGS: -L${SRCDIR}/cgal -lpartition -L/opt/homebrew/lib -lgmp -lc++
-// #cgo linux LDFLAGS: -L${SRCDIR}/cgal -lpartition -lgmp -lstdc++
-// #include "cgal/partition.h"
-// #include <stdlib.h>
+/*
+#cgo CXXFLAGS: -std=c++17 -I${SRCDIR}/cgal
+#cgo darwin LDFLAGS: ${SRCDIR}/cgal/libpartition.a -L/opt/homebrew/lib -lgmp -lc++
+#cgo linux LDFLAGS: ${SRCDIR}/cgal/libpartition.a -lgmp -lstdc++
+#cgo windows LDFLAGS: ${SRCDIR}/cgal/libpartition.a -lgmp -lstdc++
+#include "cgal/partition.h"
+#include <stdlib.h>
+*/
 import "C"
 import (
 	"fmt"
@@ -44,14 +47,14 @@ func PartitionPolygonConvex(polygon Polygon) ([]Polygon, error) {
 
 	// Access the C array of polygons
 	cPolygons := (*[1 << 30]C.CPolygon)(unsafe.Pointer(result.polygons))[:result.count:result.count]
-	
+
 	goPolygons := make([]Polygon, result.count)
 	for i := 0; i < int(result.count); i++ {
 		cPoly := cPolygons[i]
-		
+
 		// Access the C array of points for this polygon
 		cPolyPoints := (*[1 << 30]C.CPoint)(unsafe.Pointer(cPoly.points))[:cPoly.count:cPoly.count]
-		
+
 		vertices := make([]Point, cPoly.count)
 		for j := 0; j < int(cPoly.count); j++ {
 			vertices[j] = Point{
@@ -59,7 +62,7 @@ func PartitionPolygonConvex(polygon Polygon) ([]Polygon, error) {
 				Y: float32(cPolyPoints[j].y),
 			}
 		}
-		
+
 		goPolygons[i] = Polygon{
 			Vertices: vertices,
 			IsSolid:  polygon.IsSolid, // Preserve solid flag from original
@@ -68,4 +71,3 @@ func PartitionPolygonConvex(polygon Polygon) ([]Polygon, error) {
 
 	return goPolygons, nil
 }
-

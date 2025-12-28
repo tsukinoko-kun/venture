@@ -254,10 +254,20 @@ func (e *Editor) lineTraceBSP(fromX, fromY, toX, toY float32) (hit bool, hitX, h
 }
 
 // lineTraceBSPNode recursively traces a line segment through a BSP node
-// t0 and t1 define the parametric range of the line segment [0,1]
+// The segment is defined by the parametric range [t0, t1] on the line from `from` to `to`
 func (e *Editor) lineTraceBSPNode(node *pb.BSPNode, from, to bsp.Point, t0, t1 float32) (hit bool, hitX, hitY float32) {
 	if node == nil {
 		return false, 0, 0
+	}
+	
+	// Compute the actual segment endpoints for this recursion level
+	p0 := bsp.Point{
+		X: from.X + t0*(to.X-from.X),
+		Y: from.Y + t0*(to.Y-from.Y),
+	}
+	p1 := bsp.Point{
+		X: from.X + t1*(to.X-from.X),
+		Y: from.Y + t1*(to.Y-from.Y),
 	}
 	
 	switch n := node.Type.(type) {
@@ -265,9 +275,7 @@ func (e *Editor) lineTraceBSPNode(node *pb.BSPNode, from, to bsp.Point, t0, t1 f
 		// Leaf node: return hit if solid
 		if n.Leaf.IsSolid {
 			// Hit! Return the entry point of the line segment
-			hitX = from.X + t0*(to.X-from.X)
-			hitY = from.Y + t0*(to.Y-from.Y)
-			return true, hitX, hitY
+			return true, p0.X, p0.Y
 		}
 		return false, 0, 0
 		
@@ -278,10 +286,9 @@ func (e *Editor) lineTraceBSPNode(node *pb.BSPNode, from, to bsp.Point, t0, t1 f
 		normalY := split.NormalY
 		dist := split.Distance
 		
-		// Calculate signed distance for both endpoints
-		// distance = normal · point - distance
-		d0 := normalX*from.X + normalY*from.Y - dist
-		d1 := normalX*to.X + normalY*to.Y - dist
+		// Calculate signed distance for the CURRENT segment endpoints
+		d0 := normalX*p0.X + normalY*p0.Y - dist
+		d1 := normalX*p1.X + normalY*p1.Y - dist
 		
 		epsilon := float32(0.0001)
 		
@@ -295,32 +302,33 @@ func (e *Editor) lineTraceBSPNode(node *pb.BSPNode, from, to bsp.Point, t0, t1 f
 			return e.lineTraceBSPNode(split.Back, from, to, t0, t1)
 		}
 		
-		// Line segment spans the plane - need to split it
-		// Calculate intersection parameter t where line crosses plane
-		// At intersection: d0 + t*(d1-d0) = 0
-		// So: t = -d0 / (d1-d0)
+		// Line segment spans the plane - compute intersection
+		// t is the parametric value where the segment [p0, p1] crosses the plane
+		// At intersection: d0 + t*(d1-d0) = 0, so t = -d0 / (d1-d0)
 		t := -d0 / (d1 - d0)
+		
+		// Map t from [0,1] on segment to the global parametric range
 		tMid := t0 + t*(t1-t0)
 		
-		// Determine traversal order (near to far)
+		// Determine traversal order (near to far based on segment start)
 		var nearNode, farNode *pb.BSPNode
 		if d0 > 0 {
-			// Start in front
+			// Segment starts in front
 			nearNode = split.Front
 			farNode = split.Back
 		} else {
-			// Start in back
+			// Segment starts in back
 			nearNode = split.Back
 			farNode = split.Front
 		}
 		
-		// Check near side first
+		// Check near side first (from t0 to tMid)
 		hit, hitX, hitY = e.lineTraceBSPNode(nearNode, from, to, t0, tMid)
 		if hit {
 			return true, hitX, hitY
 		}
 		
-		// Check far side
+		// Check far side (from tMid to t1)
 		return e.lineTraceBSPNode(farNode, from, to, tMid, t1)
 	}
 	

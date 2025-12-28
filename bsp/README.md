@@ -210,46 +210,35 @@ point := bsp.Point{X: 50, Y: 50}
 isInSolid := bsp.PointInBSP(root, point)
 ```
 
-## Running with CGAL
+## Building the CGAL Wrapper
 
-This package uses CGAL for convex polygon decomposition. The C++ wrapper library must be built and findable at runtime.
+This package uses CGAL for convex polygon decomposition. The C++ code is compiled into a static library that is linked into the Go binary.
 
-### Building the CGAL wrapper
+### Requirements
+
+- CGAL:
+  - macOS: `brew install cgal`
+  - Linux: `apt-get install libcgal-dev`
+  - Windows: Install via MSYS2: `pacman -S mingw-w64-x86_64-cgal mingw-w64-x86_64-gmp`
+- GMP: Usually installed with CGAL
+
+### Building
 
 ```bash
 cd cgal
 make
 ```
 
-Requirements:
-- CGAL: `brew install cgal` (macOS) or `apt-get install libcgal-dev` (Linux)
-- GMP: Usually installed with CGAL
+This creates `libpartition.a` which is statically linked into the Go binary.
 
 ### Running Tests
 
-Use the provided script that sets the library path:
-
 ```bash
-./run_tests.sh
+go test ./bsp -v
 ```
 
-Or set the path manually:
+Or use the helper script:
 
 ```bash
-# macOS
-DYLD_LIBRARY_PATH="${PWD}/cgal" go test -v
-
-# Linux
-LD_LIBRARY_PATH="${PWD}/cgal" go test -v
+./run_tests.sh -v
 ```
-
-### Running Applications
-
-When running the level editor or any code that uses this package:
-
-```bash
-# From project root
-./run.sh level levels/test.yaml
-```
-
-See `../RUNNING.md` for detailed information about library paths.

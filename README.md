@@ -41,9 +41,14 @@ The level editor uses CGAL for BSP tree collision detection:
 - **CGAL** (Computational Geometry Algorithms Library)
   - macOS: `brew install cgal`
   - Linux: `sudo apt-get install libcgal-dev`
+  - Windows: Install via [vcpkg](https://vcpkg.io/) or [MSYS2](https://www.msys2.org/)
+    ```bash
+    # MSYS2 (recommended for MinGW)
+    pacman -S mingw-w64-x86_64-cgal mingw-w64-x86_64-gmp
+    ```
 - **GMP** (GNU Multiple Precision library) - usually installed with CGAL
 
-After installing CGAL, build the C++ wrapper library:
+After installing CGAL, build the C++ wrapper library (statically linked):
 
 ```bash
 cd bsp/cgal
@@ -52,32 +57,18 @@ make
 
 ## Running
 
-For development with `go run` (level editor):
-
 ```bash
-./run.sh level levels/test.yaml
-```
-
-Or set the library path manually:
-
-```bash
-# macOS
-export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH}:${PWD}/bsp/cgal"
-go run . level levels/test.yaml
-
-# Linux
-export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${PWD}/bsp/cgal"
-go run . level levels/test.yaml
-```
-
-For the compiled binary:
-
-```bash
-# Build first
+# Build
 go build
 
-# Run (library path still needed for level editor)
-DYLD_LIBRARY_PATH="${PWD}/bsp/cgal" ./venture level levels/test.yaml
+# Run the level editor
+./venture level levels/test.yaml
+```
+
+For development:
+
+```bash
+go run . level levels/test.yaml
 ```
 
 ## Project Configuration

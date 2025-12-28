@@ -1,31 +1,39 @@
 # Makefile for building CGAL partition library
 # This library is used via CGO from Go code
 
-CXX = clang++
+# Detect OS and set appropriate compiler
+UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
+
+ifeq ($(UNAME_S),Darwin)
+    CXX = clang++
+    CGAL_CXXFLAGS = $(shell pkg-config --cflags cgal 2>/dev/null || echo "-I/opt/homebrew/include")
+    CGAL_LDFLAGS = $(shell pkg-config --libs cgal 2>/dev/null || echo "-L/opt/homebrew/lib -lgmp")
+    TARGET_SHARED = libpartition.dylib
+else ifeq ($(UNAME_S),Linux)
+    CXX = g++
+    CGAL_CXXFLAGS = $(shell pkg-config --cflags cgal 2>/dev/null || echo "")
+    CGAL_LDFLAGS = $(shell pkg-config --libs cgal 2>/dev/null || echo "-lgmp")
+    TARGET_SHARED = libpartition.so
+else
+    # Windows (MinGW)
+    CXX = g++
+    CGAL_CXXFLAGS = 
+    CGAL_LDFLAGS = -lgmp
+    TARGET_SHARED = libpartition.dll
+endif
+
 CXXFLAGS = -std=c++17 -O2 -Wall -fPIC
 LDFLAGS = -shared
 
-# CGAL and GMP flags
-CGAL_CXXFLAGS = $(shell pkg-config --cflags cgal 2>/dev/null || echo "-I/opt/homebrew/include")
-CGAL_LDFLAGS = $(shell pkg-config --libs cgal 2>/dev/null || echo "-L/opt/homebrew/lib -lgmp")
-
-TARGET = libpartition.dylib
-TARGET_LINUX = libpartition.so
 TARGET_STATIC = libpartition.a
 
 SOURCES = partition.cpp
 OBJECTS = $(SOURCES:.cpp=.o)
 
-# Default target for macOS
-ifeq ($(shell uname -s),Darwin)
-    TARGET_SHARED = $(TARGET)
-else
-    TARGET_SHARED = $(TARGET_LINUX)
-endif
-
 .PHONY: all clean static shared
 
-all: $(TARGET_SHARED)
+# Build static library by default for Go integration
+all: $(TARGET_STATIC)
 
 static: $(TARGET_STATIC)
 

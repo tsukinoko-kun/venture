@@ -454,6 +454,87 @@ func PointInBSP(node *pb.BSPNode, point Point) bool {
 	}
 }
 
+// LineTraceBSPNode traces a line segment through a BSP tree
+// Returns true and hit point if the line hits solid geometry
+// The segment is defined by the parametric range [t0, t1] on the line from `from` to `to`
+func LineTraceBSPNode(node *pb.BSPNode, from, to Point, t0, t1 float32) (hit bool, hitX, hitY float32) {
+	if node == nil {
+		return false, 0, 0
+	}
+
+	// Compute the actual segment endpoints for this recursion level
+	p0 := Point{
+		X: from.X + t0*(to.X-from.X),
+		Y: from.Y + t0*(to.Y-from.Y),
+	}
+	p1 := Point{
+		X: from.X + t1*(to.X-from.X),
+		Y: from.Y + t1*(to.Y-from.Y),
+	}
+
+	switch n := node.Type.(type) {
+	case *pb.BSPNode_Leaf:
+		if n.Leaf.IsSolid {
+			// Hit! Return the entry point of the line segment
+			return true, p0.X, p0.Y
+		}
+		return false, 0, 0
+
+	case *pb.BSPNode_Split:
+		split := n.Split
+		normalX := split.NormalX
+		normalY := split.NormalY
+		dist := split.Distance
+
+		// Calculate signed distance for the CURRENT segment endpoints
+		d0 := normalX*p0.X + normalY*p0.Y - dist
+		d1 := normalX*p1.X + normalY*p1.Y - dist
+
+		epsilon := float32(0.0001)
+
+		// Both points on front side
+		if d0 > epsilon && d1 > epsilon {
+			return LineTraceBSPNode(split.Front, from, to, t0, t1)
+		}
+
+		// Both points on back side
+		if d0 <= epsilon && d1 <= epsilon {
+			return LineTraceBSPNode(split.Back, from, to, t0, t1)
+		}
+
+		// Line segment spans the plane - compute intersection
+		// t is the parametric value where the segment [p0, p1] crosses the plane
+		// At intersection: d0 + t*(d1-d0) = 0, so t = -d0 / (d1-d0)
+		t := -d0 / (d1 - d0)
+
+		// Map t from [0,1] on segment to the global parametric range
+		tMid := t0 + t*(t1-t0)
+
+		// Determine traversal order (near to far based on segment start)
+		var nearNode, farNode *pb.BSPNode
+		if d0 > 0 {
+			// Segment starts in front
+			nearNode = split.Front
+			farNode = split.Back
+		} else {
+			// Segment starts in back
+			nearNode = split.Back
+			farNode = split.Front
+		}
+
+		// Check near side first (from t0 to tMid)
+		hit, hitX, hitY = LineTraceBSPNode(nearNode, from, to, t0, tMid)
+		if hit {
+			return true, hitX, hitY
+		}
+
+		// Check far side (from tMid to t1)
+		return LineTraceBSPNode(farNode, from, to, tMid, t1)
+	}
+
+	return false, 0, 0
+}
+
 // Helper functions for creating protobuf nodes
 
 // NewLeafNode creates a new leaf node
