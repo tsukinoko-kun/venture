@@ -1,0 +1,254 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on version tags like v1.0.0, v2.1.3, etc.
+
+jobs:
+  build-linux:
+    name: Build Linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-mod-file: 'go.mod'
+          cache: true
+
+      - name: Install CGAL and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libcgal-dev \
+            libgmp-dev \
+            libmpfr-dev \
+            libboost-dev \
+            g++ \
+            make \
+            gcc \
+            libwayland-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxkbcommon-x11-dev \
+            libgles2-mesa-dev \
+            libegl1-mesa-dev \
+            libffi-dev \
+            libxcursor-dev \
+            libvulkan-dev
+
+      - name: Build CGAL static library
+        run: |
+          cd bsp/cgal
+          make clean
+          make static
+
+      - name: Build Go binary
+        run: |
+          CGO_ENABLED=1 go build -o venture-linux-x86_64 .
+
+      - name: Verify binary
+        run: |
+          file venture-linux-x86_64
+          ldd venture-linux-x86_64
+
+      - name: Download appimagetool
+        run: |
+          wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Create AppDir structure
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          # Copy binary
+          cp venture-linux-x86_64 AppDir/usr/bin/venture
+          
+          # Copy icon (convert PNG if needed, or use as-is)
+          cp venture.png AppDir/usr/share/icons/hicolor/256x256/apps/venture.png
+          cp venture.png AppDir/venture.png
+          
+          # Create .desktop file
+          cat > AppDir/usr/share/applications/venture.desktop <<EOF
+          [Desktop Entry]
+          Name=Venture
+          Exec=venture
+          Icon=venture
+          Type=Application
+          Categories=Development;
+          Comment=Build tool for the Adventurer game engine
+          Terminal=false
+          EOF
+          
+          # Create AppRun script
+          cat > AppDir/AppRun <<'EOF'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          exec "${HERE}/usr/bin/venture" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+          
+          # Copy desktop file to root for AppImage
+          cp AppDir/usr/share/applications/venture.desktop AppDir/
+
+      - name: Build AppImage
+        run: |
+          ./appimagetool-x86_64.AppImage AppDir venture-linux-x86_64.AppImage
+
+      - name: Verify AppImage
+        run: |
+          file venture-linux-x86_64.AppImage
+          chmod +x venture-linux-x86_64.AppImage
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: venture-linux-x86_64
+          path: venture-linux-x86_64.AppImage
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS arm64
+    runs-on: macos-14 # macOS 14 runs on Apple Silicon (arm64)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-mod-file: 'go.mod'
+          cache: true
+
+      - name: Install CGAL and dependencies
+        run: |
+          brew install cgal gmp pkg-config
+
+      - name: Build CGAL static library
+        run: |
+          cd bsp/cgal
+          make clean
+          make static
+
+      - name: Build Go binary
+        run: |
+          CGO_ENABLED=1 go build -o venture-darwin-arm64 .
+
+      - name: Verify binary
+        run: |
+          file venture-darwin-arm64
+          otool -L venture-darwin-arm64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: venture-darwin-arm64
+          path: venture-darwin-arm64
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-gmp
+            mingw-w64-x86_64-mpfr
+            mingw-w64-x86_64-boost
+            mingw-w64-x86_64-cgal
+            mingw-w64-x86_64-pkg-config
+            make
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-mod-file: 'go.mod'
+          cache: true
+
+      - name: Install go-winres for icon embedding
+        run: |
+          go install github.com/tc-hib/go-winres@latest
+
+      - name: Generate Windows resource file with icon
+        run: |
+          go-winres make --icon venture.png --arch amd64 --product-version ${{ github.ref_name }} --file-version ${{ github.ref_name }}
+
+      - name: Build CGAL static library
+        run: |
+          cd bsp/cgal
+          make clean
+          make static
+
+      - name: Build Go binary
+        run: |
+          CGO_ENABLED=1 go build -o venture-windows-x64.exe .
+
+      - name: Verify binary
+        run: |
+          file venture-windows-x64.exe
+          ldd venture-windows-x64.exe || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: venture-windows-x64
+          path: venture-windows-x64.exe
+          if-no-files-found: error
+
+  create-release:
+    name: Create Release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create checksums
+        run: |
+          cd artifacts
+          find . -type f -exec sha256sum {} \; > ../checksums.txt
+          cd ..
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/venture-linux-x86_64/venture-linux-x86_64.AppImage
+            artifacts/venture-darwin-arm64/venture-darwin-arm64
+            artifacts/venture-windows-x64/venture-windows-x64.exe
+            checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

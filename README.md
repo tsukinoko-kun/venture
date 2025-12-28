@@ -1,6 +1,6 @@
 # Venture
 
-<img src="venture.webp" width="256" height="256">
+<img src="venture.png" width="256" height="256">
 
 Venture is a build tool for the Adventurer game engine, written in Go. It orchestrates the complete build pipeline from source code to distributable packages.
 
