@@ -139,6 +139,23 @@ Terminal=false
 	}
 	fmt.Printf("  Copied binary to distribution directory\n")
 
+	// Ensure RPATH is set correctly for the binary to find libs in ./lib
+	// Use patchelf if available to set RPATH to $ORIGIN/lib
+	if patchelfPath, err := exec.LookPath("patchelf"); err == nil {
+		fmt.Println("Setting RPATH with patchelf...")
+		cmd := exec.Command(patchelfPath,
+			"--set-rpath", "$ORIGIN/lib",
+			finalBinary,
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			fmt.Printf("Warning: patchelf failed (binary may already have correct RPATH): %v\n%s\n", err, string(output))
+		} else {
+			fmt.Println("  ✅ RPATH set to $ORIGIN/lib")
+		}
+	} else {
+		fmt.Println("  ⚠️  patchelf not found - ensure binary was compiled with RPATH=$ORIGIN/lib")
+	}
+
 	// Copy all libraries from AppDir/usr/lib to dist/lib
 	libEntries, err := os.ReadDir(usrLibDir)
 	if err != nil {
@@ -166,28 +183,23 @@ Terminal=false
 		fmt.Printf("  Copied assets to distribution directory\n")
 	}
 
-	// Create a launch script that sets LD_LIBRARY_PATH
-	launchScriptPath := filepath.Join(distDir, "launch.sh")
-	launchScript := fmt.Sprintf(`#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-export LD_LIBRARY_PATH="$SCRIPT_DIR/lib:$LD_LIBRARY_PATH"
-exec "$SCRIPT_DIR/%s" "$@"
-`, config.BinaryName)
+	// Create zip archive
+	zipName := distDirName + ".zip"
+	zipPath := filepath.Join(config.OutputDir, zipName)
 
-	if err := os.WriteFile(launchScriptPath, []byte(launchScript), 0755); err != nil {
-		return "", fmt.Errorf("writing launch script: %w", err)
+	fmt.Println("Creating zip archive...")
+	if err := createZipArchive(distDir, zipPath, distDirName); err != nil {
+		return "", fmt.Errorf("creating zip archive: %w", err)
 	}
-	fmt.Printf("  Created launch script: launch.sh\n")
 
-	// Clean up the temporary AppDir
+	// Clean up the temporary AppDir and dist directory
 	if err := os.RemoveAll(appDir); err != nil {
 		fmt.Printf("Warning: failed to clean up AppDir: %v\n", err)
 	}
+	if err := os.RemoveAll(distDir); err != nil {
+		fmt.Printf("Warning: failed to clean up dist directory: %v\n", err)
+	}
 
-	fmt.Printf("\n✅ Linux distribution bundle created: %s\n", distDir)
-	fmt.Printf("   Binary: %s\n", config.BinaryName)
-	fmt.Printf("   Libraries: lib/\n")
-	fmt.Printf("   Launch script: launch.sh (sets LD_LIBRARY_PATH)\n")
-
-	return distDir, nil
+	fmt.Printf("\n✅ Linux package created: %s\n", zipPath)
+	return zipPath, nil
 }

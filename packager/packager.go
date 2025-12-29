@@ -22,7 +22,7 @@ type PackageConfig struct {
 
 // Package creates a distribution package with the binary, assets, and libraries.
 // On macOS: uses dylibbundler to bundle shared libraries, creates zip
-// On Linux: uses linuxdeploy to bundle dependencies, creates directory with binary and lib/ folder
+// On Linux: uses linuxdeploy to bundle dependencies, creates zip with binary and lib/ folder
 // On Windows: bundles DLLs and creates zip
 // Returns the path to the created package.
 func Package(config PackageConfig) (string, error) {

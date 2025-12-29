@@ -31,6 +31,11 @@ func Compile(config CompileConfig) error {
 		fmt.Sprintf("-collection:platform=%s", config.CollectionPath),
 	}
 
+	// Set RPATH for Linux builds so binaries can find libs in ./lib subdirectory
+	if isLinuxTarget(config.Target) {
+		args = append(args, "-extra-linker-flags:-Wl,-rpath,$ORIGIN/lib")
+	}
+
 	if config.Debug {
 		args = append(args, "-debug")
 	} else if config.Release {
@@ -63,4 +68,9 @@ func joinArgs(args []string) string {
 		result += arg
 	}
 	return result
+}
+
+// isLinuxTarget checks if the target is a Linux platform.
+func isLinuxTarget(target string) bool {
+	return len(target) >= 5 && target[:5] == "linux"
 }
