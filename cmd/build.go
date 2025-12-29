@@ -62,12 +62,14 @@ var buildCmd = &cobra.Command{
 		// Step 3: Compile Clay
 		clayDir := filepath.Join(projectRoot, "vendor", "clay")
 
-		_, err = clay.Compile(clayDir, target)
+		clayObject, err := clay.Compile(clayDir, target)
 		if err != nil {
 			return fmt.Errorf("compiling clay: %w", err)
 		}
+		fmt.Printf("Clay object file: %s\n", clayObject)
 
 		// Step 4: Ensure Steam libraries (if platform is steam)
+		fmt.Println("Checking Steam libraries...")
 		var steamLib *steamworks.LibraryInfo
 		if buildPlatform == "steam" {
 			steamworksDir := filepath.Join(projectRoot, "vendor", "steamworks", "redistributable_bin")
@@ -78,6 +80,7 @@ var buildCmd = &cobra.Command{
 		}
 
 		// Step 5: Compile Odin
+		fmt.Println("Starting Odin compilation...")
 		outputName := platform.GetOutputName(target, config.BinaryName)
 		outputPath := filepath.Join(projectRoot, outputName)
 		platformCollectionPath := fmt.Sprintf("src/platforms/%s", buildPlatform)
@@ -95,8 +98,10 @@ var buildCmd = &cobra.Command{
 		if err := odin.Compile(compileConfig); err != nil {
 			return fmt.Errorf("compiling odin: %w", err)
 		}
+		fmt.Println("Odin compilation completed successfully")
 
 		// Step 6: Package for distribution
+		fmt.Println("Starting packaging...")
 		assetsDir := filepath.Join(projectRoot, "assets")
 		buildDir := filepath.Join(projectRoot, "build")
 

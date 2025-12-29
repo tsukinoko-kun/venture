@@ -2,6 +2,7 @@ package odin
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 )
@@ -40,9 +41,12 @@ func Compile(config CompileConfig) error {
 
 	cmd := exec.Command("odin", args...)
 	cmd.Dir = filepath.Dir(config.SrcDir)
-	output, err := cmd.CombinedOutput()
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("odin compilation failed: %w\nOutput: %s", err, string(output))
+		return fmt.Errorf("odin compilation failed: %w", err)
 	}
 
 	fmt.Printf("Build successful: %s\n", config.OutputPath)
