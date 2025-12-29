@@ -117,6 +117,55 @@ jobs:
           path: venture-linux-x86_64.AppImage
           if-no-files-found: error
 
+  build-linux-cli:
+    name: Build Linux x86_64 CLI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install CGAL and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libcgal-dev \
+            libgmp-dev \
+            libmpfr-dev \
+            libboost-dev \
+            g++ \
+            make \
+            gcc
+
+      - name: Build CGAL static library
+        run: |
+          cd bsp/cgal
+          make clean
+          make static
+
+      - name: Build Go binary with cli tag
+        run: |
+          CGO_ENABLED=1 go build -tags cli -o venture-linux-cli-x86_64 .
+
+      - name: Verify binary
+        run: |
+          file venture-linux-cli-x86_64
+          ldd venture-linux-cli-x86_64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: venture-linux-cli-x86_64
+          path: venture-linux-cli-x86_64
+          if-no-files-found: error
+
   build-macos:
     name: Build macOS arm64
     runs-on: macos-14 # macOS 14 runs on Apple Silicon (arm64)
@@ -233,7 +282,7 @@ jobs:
 
   create-release:
     name: Create Release
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-linux-cli, build-macos, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -264,6 +313,7 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/venture-linux-x86_64/venture-linux-x86_64.AppImage
+            artifacts/venture-linux-cli-x86_64/venture-linux-cli-x86_64
             artifacts/venture-darwin-arm64/venture-darwin-arm64
             artifacts/venture-windows-x64/venture-windows-x64.exe
             checksums.txt
