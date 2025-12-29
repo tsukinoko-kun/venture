@@ -27,19 +27,43 @@ func Compile(clayDir, target string) (string, error) {
 
 	fmt.Println("Compiling clay_glue.c...")
 
-	// Use clang for compilation
-	clangPath, err := exec.LookPath("clang")
-	if err != nil {
-		return "", fmt.Errorf("clang not found. Please install clang compiler")
+	// Try to find a C compiler (prefer clang, fallback to gcc, then cl on Windows)
+	var compilerPath string
+	var args []string
+
+	// Try clang first
+	clangPath, clangErr := exec.LookPath("clang")
+	if clangErr == nil {
+		compilerPath = clangPath
+		args = []string{"-c", claySource, "-o", clayObject, "-O2"}
+	} else {
+		// Try gcc
+		gccPath, gccErr := exec.LookPath("gcc")
+		if gccErr == nil {
+			compilerPath = gccPath
+			args = []string{"-c", claySource, "-o", clayObject, "-O2"}
+		} else {
+			// Try MSVC cl.exe on Windows
+			clPath, clErr := exec.LookPath("cl")
+			if clErr == nil {
+				compilerPath = clPath
+				// MSVC uses different flags: /c for compile only, /Fo for output
+				args = []string{"/c", claySource, "/Fo" + clayObject, "/O2"}
+			} else {
+				return "", fmt.Errorf("no C compiler found. Tried clang (%v), gcc (%v), cl (%v)", clangErr, gccErr, clErr)
+			}
+		}
 	}
 
-	args := []string{"-c", claySource, "-o", clayObject, "-O2"}
-
-	cmd := exec.Command(clangPath, args...)
+	fmt.Printf("Using compiler: %s\n", compilerPath)
+	cmd := exec.Command(compilerPath, args...)
 	cmd.Dir = clayDir
-	output, err := cmd.CombinedOutput()
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("compiling clay_glue.c: %w\nOutput: %s", err, string(output))
+		return "", fmt.Errorf("compiling clay_glue.c with %s: %w", compilerPath, err)
 	}
 
 	fmt.Println("Clay compiled successfully")

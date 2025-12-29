@@ -144,4 +144,3 @@ func TestCollisionTestResult(t *testing.T) {
 		t.Error("Expected LineHit=true")
 	}
 }
-

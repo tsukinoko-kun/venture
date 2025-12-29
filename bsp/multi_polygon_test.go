@@ -192,7 +192,7 @@ func TestIndividualPolygonsVsMerged(t *testing.T) {
 		},
 		IsSolid: true,
 	}
-	
+
 	poly2 := Polygon{
 		Vertices: []Point{
 			{X: 10, Y: 10},
@@ -258,4 +258,3 @@ func TestIndividualPolygonsVsMerged(t *testing.T) {
 		}
 	})
 }
-

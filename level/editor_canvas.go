@@ -8,7 +8,6 @@ import (
 	"log"
 	"math"
 
-	"github.com/bloodmagesoftware/venture/bsp"
 	"gioui.org/f32"
 	"gioui.org/io/event"
 	"gioui.org/io/pointer"
@@ -16,6 +15,7 @@ import (
 	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
+	"github.com/bloodmagesoftware/venture/bsp"
 )
 
 // layoutCanvas renders the main canvas area where level editing happens
@@ -766,7 +766,7 @@ func (e *Editor) handleCollisionTest(gtx layout.Context, mouseX, mouseY float32)
 		result.LineHitX = hitX
 		result.LineHitY = hitY
 
-		log.Printf("Line trace from (%.3f, %.3f) to (%.3f, %.3f): hit=%v", 
+		log.Printf("Line trace from (%.3f, %.3f) to (%.3f, %.3f): hit=%v",
 			prev.WorldX, prev.WorldY, worldX, worldY, hit)
 		if hit {
 			log.Printf("  Hit at (%.3f, %.3f)", hitX, hitY)
@@ -800,8 +800,8 @@ func (e *Editor) drawCollisionTestResults(gtx layout.Context) {
 
 	// Colors from the plan
 	colorGreen := color.NRGBA{R: 0, G: 200, B: 80, A: 255}   // Point (non-solid)
-	colorRed := color.NRGBA{R: 255, G: 60, B: 60, A: 255}     // Point (solid)
-	colorPink := color.NRGBA{R: 255, G: 100, B: 180, A: 255}  // Line trace & intersection
+	colorRed := color.NRGBA{R: 255, G: 60, B: 60, A: 255}    // Point (solid)
+	colorPink := color.NRGBA{R: 255, G: 100, B: 180, A: 255} // Line trace & intersection
 
 	// Circle radius in pixels
 	circleRadius := float32(6.0)
@@ -813,7 +813,7 @@ func (e *Editor) drawCollisionTestResults(gtx layout.Context) {
 		// Draw line trace if it has a previous point
 		if result.HasPrevious {
 			prevScreenX, prevScreenY := worldToScreen(result.PrevWorldX, result.PrevWorldY)
-			
+
 			// Draw pink line from previous to current
 			e.drawLine(gtx, prevScreenX, prevScreenY, screenX, screenY, 2.0, colorPink)
 

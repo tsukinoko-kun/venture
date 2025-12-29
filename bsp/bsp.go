@@ -92,15 +92,15 @@ func (b *BSPBuilder) Build() *pb.BSPNode {
 			polyTrees = append(polyTrees, buildConvexPolygonTree(poly))
 		}
 	}
-	
+
 	if len(polyTrees) == 0 {
 		return NewLeafNode(0, []int32{}, false)
 	}
-	
+
 	if len(polyTrees) == 1 {
 		return polyTrees[0]
 	}
-	
+
 	// Combine multiple trees with OR logic
 	return mergeTrees(polyTrees)
 }
@@ -111,16 +111,16 @@ func mergeTrees(trees []*pb.BSPNode) *pb.BSPNode {
 	if len(trees) == 0 {
 		return NewLeafNode(0, []int32{}, false)
 	}
-	
+
 	if len(trees) == 1 {
 		return trees[0]
 	}
-	
+
 	// Take the first tree and use its splitting planes
 	// Then recursively merge the rest
 	first := trees[0]
 	rest := trees[1:]
-	
+
 	return mergeTreePair(first, mergeTrees(rest))
 }
 
@@ -135,21 +135,21 @@ func mergeTreePair(tree1, tree2 *pb.BSPNode) *pb.BSPNode {
 		// tree1 is non-solid everywhere - return tree2
 		return tree2
 	}
-	
+
 	// tree1 is a split node
 	split1 := tree1.Type.(*pb.BSPNode_Split).Split
 	line := Line{
 		Normal:   Vector2{X: split1.NormalX, Y: split1.NormalY},
 		Distance: split1.Distance,
 	}
-	
+
 	// Split tree2 along tree1's plane
 	tree2Front, tree2Back := splitTree(tree2, line)
-	
+
 	// Recursively merge
 	frontMerged := mergeTreePair(split1.Front, tree2Front)
 	backMerged := mergeTreePair(split1.Back, tree2Back)
-	
+
 	return NewSplitNode(split1.NormalX, split1.NormalY, split1.Distance, frontMerged, backMerged)
 }
 
@@ -160,10 +160,10 @@ func splitTree(tree *pb.BSPNode, splitLine Line) (*pb.BSPNode, *pb.BSPNode) {
 	if _, ok := tree.Type.(*pb.BSPNode_Leaf); ok {
 		return tree, tree
 	}
-	
+
 	// tree is a split node
 	_ = tree.Type.(*pb.BSPNode_Split).Split
-	
+
 	// For simplicity, just return the tree as-is for both sides
 	// A proper implementation would classify the split plane relative to splitLine
 	// For now, this is a conservative approximation
@@ -180,7 +180,7 @@ func buildConvexPolygonTree(poly Polygon) *pb.BSPNode {
 	// Detect winding order and normalize to CCW if needed
 	// This ensures the BSP tree works correctly regardless of input winding
 	normalizedPoly := ensureCCW(poly)
-	
+
 	// Build nested tests: must be on inside of ALL edges
 	return buildEdgeTest(normalizedPoly, 0)
 }
@@ -191,7 +191,7 @@ func signedArea(poly Polygon) float32 {
 	if len(poly.Vertices) < 3 {
 		return 0
 	}
-	
+
 	var area float32 = 0
 	n := len(poly.Vertices)
 	for i := 0; i < n; i++ {
@@ -214,14 +214,14 @@ func ensureCCW(poly Polygon) Polygon {
 	if isCCW(poly) {
 		return poly
 	}
-	
+
 	// Reverse the vertices
 	reversed := make([]Point, len(poly.Vertices))
 	n := len(poly.Vertices)
 	for i := 0; i < n; i++ {
 		reversed[i] = poly.Vertices[n-1-i]
 	}
-	
+
 	return Polygon{
 		Vertices: reversed,
 		IsSolid:  poly.IsSolid,
@@ -242,10 +242,10 @@ func buildEdgeTest(poly Polygon, edgeIdx int) *pb.BSPNode {
 
 	// Edge direction vector
 	edge := Vector2{X: v2.X - v1.X, Y: v2.Y - v1.Y}
-	
+
 	// Inward normal (for CCW polygon, rotate 90° clockwise)
 	inwardNormal := Vector2{X: edge.Y, Y: -edge.X}.Normalize()
-	
+
 	distance := inwardNormal.X*v1.X + inwardNormal.Y*v1.Y
 
 	line := Line{Normal: inwardNormal, Distance: distance}
@@ -253,9 +253,9 @@ func buildEdgeTest(poly Polygon, edgeIdx int) *pb.BSPNode {
 	// For an inward-pointing normal:
 	// - Points with NEGATIVE distance (back side) are OUTSIDE this edge
 	// - Points with POSITIVE distance (front side) are INSIDE this edge
-	// 
+	//
 	// Wait, that's not right either. Let me think about this more carefully.
-	// 
+	//
 	// The plane equation is: normal · point = distance
 	// Or: normal · point - distance = 0
 	// If (normal · point - distance) > 0, point is on the positive side (front)
@@ -269,7 +269,7 @@ func buildEdgeTest(poly Polygon, edgeIdx int) *pb.BSPNode {
 	// So: back side = inside, front side = outside
 
 	frontNode := NewLeafNode(0, []int32{}, false) // Front = outside
-	backNode := buildEdgeTest(poly, edgeIdx+1)     // Back = might be inside, check next edge
+	backNode := buildEdgeTest(poly, edgeIdx+1)    // Back = might be inside, check next edge
 
 	return NewSplitNode(line.Normal.X, line.Normal.Y, line.Distance, frontNode, backNode)
 }
@@ -286,7 +286,7 @@ func mergeOR(tree1, tree2 *pb.BSPNode) *pb.BSPNode {
 			return tree1
 		}
 	}
-	
+
 	// Check if tree1 is a non-solid leaf
 	if leaf, ok := tree1.Type.(*pb.BSPNode_Leaf); ok {
 		if !leaf.Leaf.IsSolid {
@@ -294,7 +294,7 @@ func mergeOR(tree1, tree2 *pb.BSPNode) *pb.BSPNode {
 			return tree2
 		}
 	}
-	
+
 	// Both trees have content - this is complex
 	// For a proper OR operation, we'd need to traverse both trees
 	// For now, we'll just return tree1 and lose tree2
@@ -357,10 +357,10 @@ func selectSplitLine(polygons []Polygon) Line {
 
 	// Edge vector
 	edge := Vector2{X: v2.X - v1.X, Y: v2.Y - v1.Y}
-	
+
 	// Normal is perpendicular to edge (rotate 90 degrees counter-clockwise)
 	normal := Vector2{X: -edge.Y, Y: edge.X}.Normalize()
-	
+
 	// Distance is the dot product of normal with any point on the line
 	distance := normal.X*v1.X + normal.Y*v1.Y
 

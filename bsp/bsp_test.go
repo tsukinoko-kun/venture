@@ -86,7 +86,7 @@ func TestLShapedRoom(t *testing.T) {
 	//     |   2,2 +
 	//     |       |
 	//   0,0 ---- 4,0
-	
+
 	polygons := []Polygon{
 		{
 			Vertices: []Point{
@@ -459,4 +459,3 @@ func runTestCases(t *testing.T, root *pb.BSPNode, cases []TestCase) {
 		})
 	}
 }
-

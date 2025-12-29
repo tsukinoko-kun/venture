@@ -78,4 +78,3 @@ func TestCGALPartition(t *testing.T) {
 		}
 	})
 }
-

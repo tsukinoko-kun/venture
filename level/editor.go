@@ -6,11 +6,11 @@ import (
 	"image"
 	"log"
 
-	"github.com/bloodmagesoftware/venture/bsp"
-	pb "github.com/bloodmagesoftware/venture/proto/level"
 	"gioui.org/layout"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/bloodmagesoftware/venture/bsp"
+	pb "github.com/bloodmagesoftware/venture/proto/level"
 	"golang.org/x/exp/shiny/materialdesign/icons"
 )
 
@@ -20,12 +20,12 @@ type collisionTestResult struct {
 	WorldY  float32 // world Y coordinate
 	IsSolid bool    // collision result
 	// Line trace from previous point
-	HasPrevious     bool    // true if there's a previous point to trace from
-	PrevWorldX      float32 // previous point X coordinate
-	PrevWorldY      float32 // previous point Y coordinate
-	LineHit         bool    // true if line trace hit solid
-	LineHitX        float32 // line trace hit X coordinate
-	LineHitY        float32 // line trace hit Y coordinate
+	HasPrevious bool    // true if there's a previous point to trace from
+	PrevWorldX  float32 // previous point X coordinate
+	PrevWorldY  float32 // previous point Y coordinate
+	LineHit     bool    // true if line trace hit solid
+	LineHitX    float32 // line trace hit X coordinate
+	LineHitY    float32 // line trace hit Y coordinate
 }
 
 // Editor is the main level editor component that manages the UI state and interactions
@@ -211,14 +211,14 @@ func (e *Editor) currentToolNeedsCollisionList() bool {
 func (e *Editor) buildCollisionBSP() {
 	// Convert level.Collisions to bsp.Polygon format
 	bspPolygons := make([]bsp.Polygon, 0, len(e.level.Collisions))
-	
+
 	for _, collision := range e.level.Collisions {
 		// Convert outline points to bsp.Point
 		vertices := make([]bsp.Point, 0, len(collision.Outline))
 		for _, pt := range collision.Outline {
 			vertices = append(vertices, bsp.Point{X: pt.X, Y: pt.Y})
 		}
-		
+
 		// Only add polygons with at least 3 vertices
 		if len(vertices) >= 3 {
 			bspPolygons = append(bspPolygons, bsp.Polygon{
@@ -227,12 +227,12 @@ func (e *Editor) buildCollisionBSP() {
 			})
 		}
 	}
-	
+
 	// Build the BSP tree
 	builder := bsp.NewBSPBuilder(bspPolygons)
 	e.collisionTestBSP = builder.Build()
 	e.collisionTestBSPDirty = false
-	
+
 	log.Printf("Built BSP tree from %d collision polygons", len(bspPolygons))
 }
 
@@ -247,10 +247,10 @@ func (e *Editor) lineTraceBSP(fromX, fromY, toX, toY float32) (hit bool, hitX, h
 	if e.collisionTestBSP == nil {
 		return false, 0, 0
 	}
-	
+
 	from := bsp.Point{X: fromX, Y: fromY}
 	to := bsp.Point{X: toX, Y: toY}
-	
+
 	// Recursive line trace through BSP tree
 	return e.lineTraceBSPNode(e.collisionTestBSP, from, to, 0.0, 1.0)
 }
@@ -261,7 +261,7 @@ func (e *Editor) lineTraceBSPNode(node *pb.BSPNode, from, to bsp.Point, t0, t1 f
 	if node == nil {
 		return false, 0, 0
 	}
-	
+
 	// Compute the actual segment endpoints for this recursion level
 	p0 := bsp.Point{
 		X: from.X + t0*(to.X-from.X),
@@ -271,7 +271,7 @@ func (e *Editor) lineTraceBSPNode(node *pb.BSPNode, from, to bsp.Point, t0, t1 f
 		X: from.X + t1*(to.X-from.X),
 		Y: from.Y + t1*(to.Y-from.Y),
 	}
-	
+
 	switch n := node.Type.(type) {
 	case *pb.BSPNode_Leaf:
 		// Leaf node: return hit if solid
@@ -280,38 +280,38 @@ func (e *Editor) lineTraceBSPNode(node *pb.BSPNode, from, to bsp.Point, t0, t1 f
 			return true, p0.X, p0.Y
 		}
 		return false, 0, 0
-		
+
 	case *pb.BSPNode_Split:
 		// Split node: classify line segment endpoints
 		split := n.Split
 		normalX := split.NormalX
 		normalY := split.NormalY
 		dist := split.Distance
-		
+
 		// Calculate signed distance for the CURRENT segment endpoints
 		d0 := normalX*p0.X + normalY*p0.Y - dist
 		d1 := normalX*p1.X + normalY*p1.Y - dist
-		
+
 		epsilon := float32(0.0001)
-		
+
 		// Both points on front side
 		if d0 > epsilon && d1 > epsilon {
 			return e.lineTraceBSPNode(split.Front, from, to, t0, t1)
 		}
-		
+
 		// Both points on back side
 		if d0 <= epsilon && d1 <= epsilon {
 			return e.lineTraceBSPNode(split.Back, from, to, t0, t1)
 		}
-		
+
 		// Line segment spans the plane - compute intersection
 		// t is the parametric value where the segment [p0, p1] crosses the plane
 		// At intersection: d0 + t*(d1-d0) = 0, so t = -d0 / (d1-d0)
 		t := -d0 / (d1 - d0)
-		
+
 		// Map t from [0,1] on segment to the global parametric range
 		tMid := t0 + t*(t1-t0)
-		
+
 		// Determine traversal order (near to far based on segment start)
 		var nearNode, farNode *pb.BSPNode
 		if d0 > 0 {
@@ -323,16 +323,16 @@ func (e *Editor) lineTraceBSPNode(node *pb.BSPNode, from, to bsp.Point, t0, t1 f
 			nearNode = split.Back
 			farNode = split.Front
 		}
-		
+
 		// Check near side first (from t0 to tMid)
 		hit, hitX, hitY = e.lineTraceBSPNode(nearNode, from, to, t0, tMid)
 		if hit {
 			return true, hitX, hitY
 		}
-		
+
 		// Check far side (from tMid to t1)
 		return e.lineTraceBSPNode(farNode, from, to, tMid, t1)
 	}
-	
+
 	return false, 0, 0
 }
