@@ -17,14 +17,15 @@ func packagePlatform(config PackageConfig) (string, error) {
 		return "", fmt.Errorf("dylibbundler not found. Install it with: brew install dylibbundler")
 	}
 
-	// Create temporary directory for packaging
+	// Create temporary directory for packaging (outside of build dir)
 	packageName := fmt.Sprintf("%s-%s", config.BinaryName, config.Target)
-	packageDir := filepath.Join(config.OutputDir, packageName)
-
-	// Remove old package directory if it exists
-	if err := os.RemoveAll(packageDir); err != nil {
-		return "", fmt.Errorf("removing old package directory: %w", err)
+	tempDir, err := os.MkdirTemp("", packageName+"-*")
+	if err != nil {
+		return "", fmt.Errorf("creating temporary directory: %w", err)
 	}
+	defer os.RemoveAll(tempDir) // Clean up temp directory when done
+
+	packageDir := filepath.Join(tempDir, packageName)
 
 	// Create package directory and libs subdirectory
 	libsDir := filepath.Join(packageDir, "libs")
@@ -86,18 +87,18 @@ func packagePlatform(config PackageConfig) (string, error) {
 		fmt.Println("  ✅ Shared libraries bundled successfully")
 	}
 
-	// Create zip archive
+	// Create zip archive in the build directory
 	zipName := packageName + ".zip"
 	zipPath := filepath.Join(config.OutputDir, zipName)
+
+	// Ensure output directory exists
+	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
+		return "", fmt.Errorf("creating output directory: %w", err)
+	}
 
 	fmt.Println("Creating zip archive...")
 	if err := createZipArchive(packageDir, zipPath, packageName); err != nil {
 		return "", fmt.Errorf("creating zip archive: %w", err)
-	}
-
-	// Clean up temporary package directory
-	if err := os.RemoveAll(packageDir); err != nil {
-		fmt.Printf("Warning: Failed to clean up temporary directory: %v\n", err)
 	}
 
 	fmt.Printf("\n✅ macOS package created: %s\n", zipPath)

@@ -17,17 +17,19 @@ func packagePlatform(config PackageConfig) (string, error) {
 		return "", fmt.Errorf("linuxdeploy not found. Download it from: https://github.com/linuxdeploy/linuxdeploy/releases")
 	}
 
+	// Create temporary directory for packaging (outside of build dir)
+	tempDir, err := os.MkdirTemp("", config.BinaryName+"-*")
+	if err != nil {
+		return "", fmt.Errorf("creating temporary directory: %w", err)
+	}
+	defer os.RemoveAll(tempDir) // Clean up temp directory when done
+
 	// Create AppDir structure (we'll use linuxdeploy to bundle dependencies)
 	appDirName := config.BinaryName + ".AppDir"
-	appDir := filepath.Join(config.OutputDir, appDirName)
+	appDir := filepath.Join(tempDir, appDirName)
 	usrBinDir := filepath.Join(appDir, "usr", "bin")
 	usrLibDir := filepath.Join(appDir, "usr", "lib")
 	usrShareDir := filepath.Join(appDir, "usr", "share")
-
-	// Remove old AppDir if it exists
-	if err := os.RemoveAll(appDir); err != nil {
-		return "", fmt.Errorf("removing old AppDir: %w", err)
-	}
 
 	for _, dir := range []string{usrBinDir, usrLibDir, usrShareDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -102,7 +104,7 @@ Terminal=false
 		"--appdir", appDir,
 		"--executable", targetBinary,
 	)
-	cmd.Dir = config.OutputDir
+	cmd.Dir = tempDir
 
 	output, err := cmd.CombinedOutput()
 	fmt.Printf("linuxdeploy output:\n%s\n", string(output))
@@ -113,12 +115,7 @@ Terminal=false
 
 	// Now create the final distribution structure
 	distDirName := fmt.Sprintf("%s-%s", config.BinaryName, config.Target)
-	distDir := filepath.Join(config.OutputDir, distDirName)
-
-	// Remove old distribution directory if it exists
-	if err := os.RemoveAll(distDir); err != nil {
-		return "", fmt.Errorf("removing old distribution directory: %w", err)
-	}
+	distDir := filepath.Join(tempDir, distDirName)
 
 	// Create dist directory structure
 	distLibDir := filepath.Join(distDir, "lib")
@@ -183,21 +180,18 @@ Terminal=false
 		fmt.Printf("  Copied assets to distribution directory\n")
 	}
 
-	// Create zip archive
+	// Create zip archive in the build directory
 	zipName := distDirName + ".zip"
 	zipPath := filepath.Join(config.OutputDir, zipName)
+
+	// Ensure output directory exists
+	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
+		return "", fmt.Errorf("creating output directory: %w", err)
+	}
 
 	fmt.Println("Creating zip archive...")
 	if err := createZipArchive(distDir, zipPath, distDirName); err != nil {
 		return "", fmt.Errorf("creating zip archive: %w", err)
-	}
-
-	// Clean up the temporary AppDir and dist directory
-	if err := os.RemoveAll(appDir); err != nil {
-		fmt.Printf("Warning: failed to clean up AppDir: %v\n", err)
-	}
-	if err := os.RemoveAll(distDir); err != nil {
-		fmt.Printf("Warning: failed to clean up dist directory: %v\n", err)
 	}
 
 	fmt.Printf("\n✅ Linux package created: %s\n", zipPath)
