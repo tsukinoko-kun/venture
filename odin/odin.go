@@ -36,6 +36,11 @@ func Compile(config CompileConfig) error {
 		args = append(args, "-extra-linker-flags:-Wl,-rpath,$ORIGIN/lib")
 	}
 
+	// Set subsystem:windows for Windows builds to prevent console window
+	if isWindowsTarget(config.Target) {
+		args = append(args, "-subsystem:windows")
+	}
+
 	if config.Debug {
 		args = append(args, "-debug")
 	} else if config.Release {
@@ -73,4 +78,9 @@ func joinArgs(args []string) string {
 // isLinuxTarget checks if the target is a Linux platform.
 func isLinuxTarget(target string) bool {
 	return len(target) >= 5 && target[:5] == "linux"
+}
+
+// isWindowsTarget checks if the target is a Windows platform.
+func isWindowsTarget(target string) bool {
+	return len(target) >= 7 && target[:7] == "windows"
 }
