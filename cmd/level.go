@@ -31,8 +31,8 @@ var levelCmd = &cobra.Command{
 			return err
 		}
 
-		levelsDir := filepath.Join(projectRoot, "levels")
 		assetsDir := filepath.Join(projectRoot, "assets")
+		levelsDir := filepath.Join(assetsDir, "levels")
 		levelFilePath := filepath.Join(levelsDir, levelName+".yaml")
 		lvl := level.New()
 		if _, err := os.Stat(levelFilePath); err == nil {
