@@ -6,34 +6,33 @@ package level;
 option go_package = "github.com/bloodmagesoftware/venture/proto/level";
 
 message LevelData {
-    // We only need the top of the tree.
-    BSPNode root = 1;
+  // We only need the top of the tree.
+  BSPNode root = 1;
 }
 
 message BSPNode {
-    // A node is strictly one of these two things.
-    oneof type {
-        Split split = 1;
-        Leaf leaf = 2;
-    }
+  // A node is strictly one of these two things.
+  oneof type {
+    Split split = 1;
+    Leaf leaf = 2;
+  }
 }
 
 message Split {
-    // The Plane (Line in 2D): Normal * Point = Distance
-    float normal_x = 1;
-    float normal_y = 2;
-    float distance = 3;
+  // The Plane (Line in 2D): Normal * Point = Distance
+  float normal_x = 1;
+  float normal_y = 2;
+  float distance = 3;
 
-    // Recursive: The children are themselves Nodes.
-    // No indices required; just nest the objects.
-    BSPNode front = 4;
-    BSPNode back = 5;
+  // Recursive: The children are themselves Nodes.
+  // No indices required; just nest the objects.
+  BSPNode front = 4;
+  BSPNode back = 5;
 }
 
 message Leaf {
-    // The actual content index (e.g., sector ID, polygons)
-    int32 sector_id = 1;
-    repeated int32 polygon_indices = 2;
-    bool is_solid = 3;
+  // The actual content index (e.g., sector ID, polygons)
+  int32 sector_id = 1;
+  repeated int32 polygon_indices = 2;
+  bool is_solid = 3;
 }
-
