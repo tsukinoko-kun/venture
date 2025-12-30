@@ -10,6 +10,18 @@ import (
 func packagePlatform(config PackageConfig) (string, error) {
 	fmt.Println("Creating Windows distribution package...")
 
+	// Step 1: Download SDL DLLs if library versions are specified
+	dlls := GetSDLDLLs(
+		config.LibraryVersions.SDL,
+		config.LibraryVersions.SDLTTF,
+		config.LibraryVersions.SDLImage,
+	)
+
+	dllPaths, err := EnsureDLLsDownloaded(dlls)
+	if err != nil {
+		return "", fmt.Errorf("downloading DLLs: %w", err)
+	}
+
 	// Create temporary directory for packaging (outside of build dir)
 	packageName := fmt.Sprintf("%s-%s", config.BinaryName, config.Target)
 	tempDir, err := os.MkdirTemp("", packageName+"-*")
@@ -51,13 +63,9 @@ func packagePlatform(config PackageConfig) (string, error) {
 		fmt.Printf("  Copied library: %s\n", libName)
 	}
 
-	// On Windows, we need to find and copy all DLL dependencies
-	// We'll use a simple approach: look for common runtime DLLs in system paths
-	fmt.Println("Scanning for DLL dependencies...")
-	if err := findAndCopyWindowsDLLs(targetBinary, packageDir); err != nil {
-		// Don't fail the build if DLL detection has issues, just warn
-		fmt.Printf("Warning: Could not automatically detect all DLLs: %v\n", err)
-		fmt.Println("You may need to manually include missing DLLs")
+	// Copy downloaded SDL DLLs to package directory
+	if err := CopyDLLsToPackage(dllPaths, packageDir); err != nil {
+		return "", fmt.Errorf("copying SDL DLLs: %w", err)
 	}
 
 	// Create zip archive in the build directory
@@ -76,61 +84,4 @@ func packagePlatform(config PackageConfig) (string, error) {
 
 	fmt.Printf("\n✅ Windows package created: %s\n", zipPath)
 	return zipPath, nil
-}
-
-// findAndCopyWindowsDLLs attempts to find and copy DLL dependencies for Windows
-func findAndCopyWindowsDLLs(binaryPath, targetDir string) error {
-	// Check if we're running on Windows and have access to dependency tools
-	// For now, we'll use a simple heuristic: look in common locations
-
-	// Common DLL locations on Windows
-	searchPaths := []string{
-		filepath.Dir(binaryPath), // Same directory as binary
-		"C:\\Windows\\System32",
-		"C:\\Windows\\SysWOW64",
-	}
-
-	// Common runtime DLLs that games might need (excluding system DLLs)
-	// In practice, most DLLs will be found next to the binary or in vendor folders
-	commonDLLs := []string{
-		"SDL3.dll",
-		"openal32.dll",
-		"OpenAL32.dll",
-		"libvorbis.dll",
-		"libvorbisfile.dll",
-		"libogg.dll",
-	}
-
-	copiedCount := 0
-	for _, dllName := range commonDLLs {
-		found := false
-		for _, searchPath := range searchPaths {
-			dllPath := filepath.Join(searchPath, dllName)
-			if _, err := os.Stat(dllPath); err == nil {
-				targetPath := filepath.Join(targetDir, dllName)
-				// Don't overwrite if already exists
-				if _, err := os.Stat(targetPath); err == nil {
-					found = true
-					break
-				}
-				if err := copyFile(dllPath, targetPath); err == nil {
-					fmt.Printf("  Copied DLL: %s\n", dllName)
-					copiedCount++
-					found = true
-					break
-				}
-			}
-		}
-		if !found {
-			// Not an error - the binary might not need this DLL
-		}
-	}
-
-	if copiedCount > 0 {
-		fmt.Printf("  Found and copied %d additional DLL(s)\n", copiedCount)
-	} else {
-		fmt.Println("  No additional DLLs found (this is normal if all dependencies are statically linked)")
-	}
-
-	return nil
 }

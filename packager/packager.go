@@ -9,15 +9,24 @@ import (
 	"strings"
 )
 
+// LibraryVersions contains version information for SDL libraries.
+// Used to download platform-specific binaries from official releases.
+type LibraryVersions struct {
+	SDL      string // SDL3 version (e.g., "3.2.28")
+	SDLTTF   string // SDL3_ttf version (e.g., "3.2.2")
+	SDLImage string // SDL3_image version (e.g., "3.2.4")
+}
+
 // PackageConfig holds the configuration for packaging.
 type PackageConfig struct {
-	ProjectRoot string   // Root directory of the project
-	BinaryPath  string   // Path to the compiled binary
-	BinaryName  string   // Name of the binary (without extension)
-	AssetsDir   string   // Path to the assets directory
-	Libraries   []string // Paths to dynamic libraries to include (e.g., Steam)
-	Target      string   // Target platform (e.g., "darwin_arm64")
-	OutputDir   string   // Directory to output the package
+	ProjectRoot     string          // Root directory of the project
+	BinaryPath      string          // Path to the compiled binary
+	BinaryName      string          // Name of the binary (without extension)
+	AssetsDir       string          // Path to the assets directory
+	Libraries       []string        // Paths to dynamic libraries to include (e.g., Steam)
+	LibraryVersions LibraryVersions // Versions of SDL libraries to download
+	Target          string          // Target platform (e.g., "darwin_arm64")
+	OutputDir       string          // Directory to output the package
 }
 
 // Package creates a distribution package with the binary, assets, and libraries.

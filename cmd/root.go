@@ -13,7 +13,7 @@ var rootCmd = &cobra.Command{
 	Long: `Venture is a comprehensive build tool for the Adventurer game engine.
 It handles import linting, protobuf generation, C library compilation,
 Odin compilation, and distribution packaging for multiple platforms.`,
-	SilenceErrors:     true,
+	SilenceUsage:      true,
 	DisableAutoGenTag: true,
 }
 

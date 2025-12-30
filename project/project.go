@@ -10,11 +10,21 @@ import (
 
 const configFileName = "venture.yaml"
 
+// Libraries contains version configuration for external libraries.
+// These are used to download platform-specific binaries (DLLs, dylibs, etc.)
+// from official release sources like GitHub.
+type Libraries struct {
+	SDL      string `yaml:"sdl,omitempty"`       // SDL3 version (e.g., "3.2.28")
+	SDLTTF   string `yaml:"sdl_ttf,omitempty"`   // SDL3_ttf version (e.g., "3.2.2")
+	SDLImage string `yaml:"sdl_image,omitempty"` // SDL3_image version (e.g., "3.2.4")
+}
+
 // Config represents the project configuration from venture.yaml.
 type Config struct {
-	Name       string `yaml:"name"`
-	BinaryName string `yaml:"binary_name"`
-	SteamAppID string `yaml:"steam_app_id,omitempty"`
+	Name       string    `yaml:"name"`
+	BinaryName string    `yaml:"binary_name"`
+	SteamAppID string    `yaml:"steam_app_id,omitempty"`
+	Libraries  Libraries `yaml:"libraries,omitempty"`
 }
 
 // FindProjectRoot walks up from the current working directory looking for venture.yaml.

@@ -84,6 +84,13 @@ binary_name: my_game
 
 # Steam App ID (optional, required for --platform steam builds)
 steam_app_id: 480
+
+# Library versions (optional)
+# Downloads SDL libraries from official GitHub releases
+libraries:
+  sdl: 3.2.28
+  sdl_ttf: 3.2.2
+  sdl_image: 3.2.4
 ```
 
 ## Commands
@@ -233,9 +240,9 @@ Commands in `cmd/` orchestrate these packages in a declarative, high-level way.
 - Launch script sets `LD_LIBRARY_PATH` to `lib/` subdirectory
 
 ### Windows
-- Automatically searches for common DLLs (SDL3, OpenAL, etc.)
+- Automatically downloads SDL DLLs from official GitHub releases based on versions in `venture.yaml`
+- DLLs are cached in the user's cache directory (version-specific)
 - Places all DLLs next to the `.exe` in the zip archive
-- Limited automatic dependency detection (may require manual DLL inclusion)
 
 ## Error Handling
 

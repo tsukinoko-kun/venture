@@ -116,8 +116,13 @@ var buildCmd = &cobra.Command{
 			BinaryName:  config.BinaryName,
 			AssetsDir:   assetsDir,
 			Libraries:   libraries,
-			Target:      target,
-			OutputDir:   buildDir,
+			LibraryVersions: packager.LibraryVersions{
+				SDL:      config.Libraries.SDL,
+				SDLTTF:   config.Libraries.SDLTTF,
+				SDLImage: config.Libraries.SDLImage,
+			},
+			Target:    target,
+			OutputDir: buildDir,
 		}
 
 		packagePath, err := packager.Package(packageConfig)

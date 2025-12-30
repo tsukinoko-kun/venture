@@ -13,3 +13,11 @@ binary_name: my_game
 # When running with --platform steam, this will be set as the SteamAppId environment variable
 steam_app_id: 480
 
+# Library versions (optional)
+# These specify which versions of SDL libraries to download for platform builds.
+# Libraries are downloaded from official GitHub releases and cached locally.
+libraries:
+  sdl: 3.2.28
+  sdl_ttf: 3.2.2
+  sdl_image: 3.2.4
+
