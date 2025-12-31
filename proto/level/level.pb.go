@@ -24,7 +24,9 @@ const (
 type LevelData struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// We only need the top of the tree.
-	Root          *BSPNode `protobuf:"bytes,1,opt,name=root,proto3" json:"root,omitempty"`
+	Root *BSPNode `protobuf:"bytes,1,opt,name=root,proto3" json:"root,omitempty"`
+	// Ground tiles for visual rendering
+	Ground        []*Tile `protobuf:"bytes,2,rep,name=ground,proto3" json:"ground,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -62,6 +64,13 @@ func (*LevelData) Descriptor() ([]byte, []int) {
 func (x *LevelData) GetRoot() *BSPNode {
 	if x != nil {
 		return x.Root
+	}
+	return nil
+}
+
+func (x *LevelData) GetGround() []*Tile {
+	if x != nil {
+		return x.Ground
 	}
 	return nil
 }
@@ -290,13 +299,118 @@ func (x *Leaf) GetIsSolid() bool {
 	return false
 }
 
+type Vec2I struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	X             int32                  `protobuf:"varint,1,opt,name=x,proto3" json:"x,omitempty"`
+	Y             int32                  `protobuf:"varint,2,opt,name=y,proto3" json:"y,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Vec2I) Reset() {
+	*x = Vec2I{}
+	mi := &file_level_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Vec2I) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Vec2I) ProtoMessage() {}
+
+func (x *Vec2I) ProtoReflect() protoreflect.Message {
+	mi := &file_level_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Vec2I.ProtoReflect.Descriptor instead.
+func (*Vec2I) Descriptor() ([]byte, []int) {
+	return file_level_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Vec2I) GetX() int32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *Vec2I) GetY() int32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+type Tile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Position      *Vec2I                 `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	Texture       string                 `protobuf:"bytes,2,opt,name=texture,proto3" json:"texture,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Tile) Reset() {
+	*x = Tile{}
+	mi := &file_level_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Tile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Tile) ProtoMessage() {}
+
+func (x *Tile) ProtoReflect() protoreflect.Message {
+	mi := &file_level_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Tile.ProtoReflect.Descriptor instead.
+func (*Tile) Descriptor() ([]byte, []int) {
+	return file_level_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Tile) GetPosition() *Vec2I {
+	if x != nil {
+		return x.Position
+	}
+	return nil
+}
+
+func (x *Tile) GetTexture() string {
+	if x != nil {
+		return x.Texture
+	}
+	return ""
+}
+
 var File_level_proto protoreflect.FileDescriptor
 
 const file_level_proto_rawDesc = "" +
 	"\n" +
-	"\vlevel.proto\x12\x05level\"/\n" +
+	"\vlevel.proto\x12\x05level\"T\n" +
 	"\tLevelData\x12\"\n" +
-	"\x04root\x18\x01 \x01(\v2\x0e.level.BSPNodeR\x04root\"Z\n" +
+	"\x04root\x18\x01 \x01(\v2\x0e.level.BSPNodeR\x04root\x12#\n" +
+	"\x06ground\x18\x02 \x03(\v2\v.level.TileR\x06ground\"Z\n" +
 	"\aBSPNode\x12$\n" +
 	"\x05split\x18\x01 \x01(\v2\f.level.SplitH\x00R\x05split\x12!\n" +
 	"\x04leaf\x18\x02 \x01(\v2\v.level.LeafH\x00R\x04leafB\x06\n" +
@@ -310,7 +424,13 @@ const file_level_proto_rawDesc = "" +
 	"\x04Leaf\x12\x1b\n" +
 	"\tsector_id\x18\x01 \x01(\x05R\bsectorId\x12'\n" +
 	"\x0fpolygon_indices\x18\x02 \x03(\x05R\x0epolygonIndices\x12\x19\n" +
-	"\bis_solid\x18\x03 \x01(\bR\aisSolidB2Z0github.com/bloodmagesoftware/venture/proto/levelb\x06proto3"
+	"\bis_solid\x18\x03 \x01(\bR\aisSolid\"#\n" +
+	"\x05Vec2i\x12\f\n" +
+	"\x01x\x18\x01 \x01(\x05R\x01x\x12\f\n" +
+	"\x01y\x18\x02 \x01(\x05R\x01y\"J\n" +
+	"\x04Tile\x12(\n" +
+	"\bposition\x18\x01 \x01(\v2\f.level.Vec2iR\bposition\x12\x18\n" +
+	"\atexture\x18\x02 \x01(\tR\atextureB2Z0github.com/bloodmagesoftware/venture/proto/levelb\x06proto3"
 
 var (
 	file_level_proto_rawDescOnce sync.Once
@@ -324,24 +444,28 @@ func file_level_proto_rawDescGZIP() []byte {
 	return file_level_proto_rawDescData
 }
 
-var file_level_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_level_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_level_proto_goTypes = []any{
 	(*LevelData)(nil), // 0: level.LevelData
 	(*BSPNode)(nil),   // 1: level.BSPNode
 	(*Split)(nil),     // 2: level.Split
 	(*Leaf)(nil),      // 3: level.Leaf
+	(*Vec2I)(nil),     // 4: level.Vec2i
+	(*Tile)(nil),      // 5: level.Tile
 }
 var file_level_proto_depIdxs = []int32{
 	1, // 0: level.LevelData.root:type_name -> level.BSPNode
-	2, // 1: level.BSPNode.split:type_name -> level.Split
-	3, // 2: level.BSPNode.leaf:type_name -> level.Leaf
-	1, // 3: level.Split.front:type_name -> level.BSPNode
-	1, // 4: level.Split.back:type_name -> level.BSPNode
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	5, // 1: level.LevelData.ground:type_name -> level.Tile
+	2, // 2: level.BSPNode.split:type_name -> level.Split
+	3, // 3: level.BSPNode.leaf:type_name -> level.Leaf
+	1, // 4: level.Split.front:type_name -> level.BSPNode
+	1, // 5: level.Split.back:type_name -> level.BSPNode
+	4, // 6: level.Tile.position:type_name -> level.Vec2i
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_level_proto_init() }
@@ -359,7 +483,7 @@ func file_level_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_level_proto_rawDesc), len(file_level_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

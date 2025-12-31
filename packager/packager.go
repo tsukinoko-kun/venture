@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"iter"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,14 +20,15 @@ type LibraryVersions struct {
 
 // PackageConfig holds the configuration for packaging.
 type PackageConfig struct {
-	ProjectRoot     string          // Root directory of the project
-	BinaryPath      string          // Path to the compiled binary
-	BinaryName      string          // Name of the binary (without extension)
-	AssetsDir       string          // Path to the assets directory
-	Libraries       []string        // Paths to dynamic libraries to include (e.g., Steam)
-	LibraryVersions LibraryVersions // Versions of SDL libraries to download
-	Target          string          // Target platform (e.g., "darwin_arm64")
-	OutputDir       string          // Directory to output the package
+	ProjectRoot     string                    // Root directory of the project
+	BinaryPath      string                    // Path to the compiled binary
+	BinaryName      string                    // Name of the binary (without extension)
+	AssetsDir       string                    // Path to the assets directory
+	Libraries       []string                  // Paths to dynamic libraries to include (e.g., Steam)
+	LibraryVersions LibraryVersions           // Versions of SDL libraries to download
+	Target          string                    // Target platform (e.g., "darwin_arm64")
+	OutputDir       string                    // Directory to output the package
+	LevelIterator   iter.Seq2[string, []byte] // Iterator yielding (relativePath, protoBytes) for levels
 }
 
 // Package creates a distribution package with the binary, assets, and libraries.
@@ -92,6 +94,42 @@ func copyDir(src, dst string) error {
 		relPath, err := filepath.Rel(src, path)
 		if err != nil {
 			return err
+		}
+
+		targetPath := filepath.Join(dst, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, info.Mode())
+		}
+
+		return copyFile(path, targetPath)
+	})
+}
+
+// copyDirExcludingLevels recursively copies a directory, excluding YAML level files
+func copyDirExcludingLevels(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip .DS_Store and other hidden files
+		if info.Name() == ".DS_Store" || strings.HasPrefix(info.Name(), "._") {
+			return nil
+		}
+
+		// Calculate relative path
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		// Skip YAML files in the levels directory
+		if strings.HasPrefix(relPath, "levels"+string(filepath.Separator)) && strings.HasSuffix(path, ".yaml") {
+			return nil
+		}
+		if relPath == filepath.Join("levels", info.Name()) && strings.HasSuffix(info.Name(), ".yaml") {
+			return nil
 		}
 
 		targetPath := filepath.Join(dst, relPath)

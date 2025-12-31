@@ -1,18 +1,27 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"iter"
+	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
+	"github.com/bloodmagesoftware/venture/bsp"
 	"github.com/bloodmagesoftware/venture/clay"
+	"github.com/bloodmagesoftware/venture/level"
 	"github.com/bloodmagesoftware/venture/linter"
 	"github.com/bloodmagesoftware/venture/odin"
 	"github.com/bloodmagesoftware/venture/packager"
 	"github.com/bloodmagesoftware/venture/platform"
 	"github.com/bloodmagesoftware/venture/project"
+	pb "github.com/bloodmagesoftware/venture/proto/level"
 	"github.com/bloodmagesoftware/venture/protobuf"
 	"github.com/bloodmagesoftware/venture/steamworks"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -59,6 +68,11 @@ var buildCmd = &cobra.Command{
 			return fmt.Errorf("generating protobuf: %w", err)
 		}
 
+		// Step 2.5: Create level building iterator
+		fmt.Println("Preparing level conversion with 30s timeout per level...")
+		assetsDir := filepath.Join(projectRoot, "assets")
+		levelIterator := buildLevelsIterator(assetsDir)
+
 		// Step 3: Compile Clay
 		clayDir := filepath.Join(projectRoot, "vendor", "clay")
 
@@ -102,7 +116,6 @@ var buildCmd = &cobra.Command{
 
 		// Step 6: Package for distribution
 		fmt.Println("Starting packaging...")
-		assetsDir := filepath.Join(projectRoot, "assets")
 		buildDir := filepath.Join(projectRoot, "build")
 
 		var libraries []string
@@ -121,8 +134,9 @@ var buildCmd = &cobra.Command{
 				SDLTTF:   config.Libraries.SDLTTF,
 				SDLImage: config.Libraries.SDLImage,
 			},
-			Target:    target,
-			OutputDir: buildDir,
+			Target:        target,
+			OutputDir:     buildDir,
+			LevelIterator: levelIterator,
 		}
 
 		packagePath, err := packager.Package(packageConfig)
@@ -140,4 +154,146 @@ func init() {
 	buildCmd.Flags().StringVarP(&buildPlatform, "platform", "p", "fallback", "Platform (steam/fallback)")
 	buildCmd.Flags().BoolVarP(&buildDebug, "debug", "d", false, "Build with debug symbols")
 	buildCmd.Flags().BoolVarP(&buildRelease, "release", "r", false, "Build with optimizations")
+}
+
+// convertLevelToProto converts a YAML level to protobuf format
+func convertLevelToProto(yamlLevel *level.Level) (*pb.LevelData, error) {
+	if yamlLevel == nil {
+		return nil, fmt.Errorf("nil level provided")
+	}
+
+	// Convert collision polygons to BSP tree
+	var bspPolygons []bsp.Polygon
+	for _, collision := range yamlLevel.Collisions {
+		vertices := make([]bsp.Point, len(collision.Outline))
+		for i, v := range collision.Outline {
+			vertices[i] = bsp.Point{X: v.X, Y: v.Y}
+		}
+		bspPolygons = append(bspPolygons, bsp.Polygon{
+			Vertices: vertices,
+			IsSolid:  true,
+		})
+	}
+
+	// Build BSP tree
+	builder := bsp.NewBSPBuilder(bspPolygons)
+	bspRoot := builder.Build()
+
+	// Convert ground tiles
+	groundTiles := make([]*pb.Tile, len(yamlLevel.Ground))
+	for i, tile := range yamlLevel.Ground {
+		groundTiles[i] = &pb.Tile{
+			Position: &pb.Vec2I{
+				X: tile.Position.X,
+				Y: tile.Position.Y,
+			},
+			Texture: tile.Texture,
+		}
+	}
+
+	// Create level data
+	levelData := &pb.LevelData{
+		Root:   bspRoot,
+		Ground: groundTiles,
+	}
+
+	return levelData, nil
+}
+
+// buildLevelsIterator creates an iterator that yields (relativePath, protoBytes) pairs
+// for each level file, with a 30-second timeout per level conversion.
+// If any level times out, the build fails with an error.
+func buildLevelsIterator(assetsDir string) iter.Seq2[string, []byte] {
+	return func(yield func(string, []byte) bool) {
+		levelsDir := filepath.Join(assetsDir, "levels")
+
+		// Find all YAML level files
+		var matches []string
+		err := filepath.Walk(levelsDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() && strings.HasSuffix(path, ".yaml") {
+				matches = append(matches, path)
+			}
+			return nil
+		})
+
+		if err != nil && !os.IsNotExist(err) {
+			fmt.Printf("Error walking levels directory: %v\n", err)
+			return
+		}
+
+		// Process each level with timeout
+		for _, yamlPath := range matches {
+			// Create context with 30-second timeout
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+			// Channel to receive the result
+			type result struct {
+				relPath string
+				bytes   []byte
+				err     error
+			}
+			resultChan := make(chan result, 1)
+
+			// Run conversion in goroutine
+			go func() {
+				defer cancel()
+
+				// Load the YAML level
+				lvl := level.New()
+				if err := lvl.Load(yamlPath); err != nil {
+					resultChan <- result{err: fmt.Errorf("loading level %s: %w", yamlPath, err)}
+					return
+				}
+
+				// Convert to protobuf
+				protoLevel, err := convertLevelToProto(lvl)
+				if err != nil {
+					resultChan <- result{err: fmt.Errorf("converting level %s to protobuf: %w", yamlPath, err)}
+					return
+				}
+
+				// Serialize to bytes
+				protoBytes, err := proto.Marshal(protoLevel)
+				if err != nil {
+					resultChan <- result{err: fmt.Errorf("marshaling level %s: %w", yamlPath, err)}
+					return
+				}
+
+				// Get relative path from assets directory and change extension
+				relPath, err := filepath.Rel(assetsDir, yamlPath)
+				if err != nil {
+					resultChan <- result{err: fmt.Errorf("getting relative path for %s: %w", yamlPath, err)}
+					return
+				}
+				// Change .yaml extension to .pb
+				relPath = strings.TrimSuffix(relPath, ".yaml") + ".pb"
+
+				resultChan <- result{relPath: relPath, bytes: protoBytes, err: nil}
+			}()
+
+			// Wait for result or timeout
+			select {
+			case <-ctx.Done():
+				// Timeout occurred
+				fmt.Printf("ERROR: Level conversion timed out after 30s: %s\n", yamlPath)
+				cancel()
+				return // Stop iteration, build will fail
+			case res := <-resultChan:
+				cancel()
+				if res.err != nil {
+					fmt.Printf("ERROR: %v\n", res.err)
+					return // Stop iteration, build will fail
+				}
+
+				// Yield the result
+				fmt.Printf("  Converted: %s -> %s\n", filepath.Base(yamlPath), res.relPath)
+				if !yield(res.relPath, res.bytes) {
+					return // Consumer requested stop
+				}
+			}
+		}
+	}
 }

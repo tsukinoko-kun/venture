@@ -8,6 +8,8 @@ option go_package = "github.com/bloodmagesoftware/venture/proto/level";
 message LevelData {
   // We only need the top of the tree.
   BSPNode root = 1;
+  // Ground tiles for visual rendering
+  repeated Tile ground = 2;
 }
 
 message BSPNode {
@@ -35,4 +37,14 @@ message Leaf {
   int32 sector_id = 1;
   repeated int32 polygon_indices = 2;
   bool is_solid = 3;
+}
+
+message Vec2i {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message Tile {
+  Vec2i position = 1;
+  string texture = 2;
 }

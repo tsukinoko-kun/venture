@@ -44,13 +44,34 @@ func packagePlatform(config PackageConfig) (string, error) {
 	}
 	fmt.Printf("  Copied binary: %s\n", filepath.Base(targetBinary))
 
-	// Copy assets to package directory
+	// Copy assets to package directory (excluding YAML level files)
 	if _, err := os.Stat(config.AssetsDir); err == nil {
 		assetsTarget := filepath.Join(packageDir, "assets")
-		if err := copyDir(config.AssetsDir, assetsTarget); err != nil {
+		if err := copyDirExcludingLevels(config.AssetsDir, assetsTarget); err != nil {
 			return "", fmt.Errorf("copying assets: %w", err)
 		}
-		fmt.Printf("  Copied assets\n")
+		fmt.Printf("  Copied assets (excluding YAML level files)\n")
+	}
+
+	// Write protobuf level files from iterator
+	if config.LevelIterator != nil {
+		assetsTarget := filepath.Join(packageDir, "assets")
+		levelCount := 0
+		for relPath, protoBytes := range config.LevelIterator {
+			targetPath := filepath.Join(assetsTarget, relPath)
+
+			// Ensure directory exists
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return "", fmt.Errorf("creating directory for level %s: %w", relPath, err)
+			}
+
+			// Write protobuf bytes immediately
+			if err := os.WriteFile(targetPath, protoBytes, 0644); err != nil {
+				return "", fmt.Errorf("writing level file %s: %w", relPath, err)
+			}
+			levelCount++
+		}
+		fmt.Printf("  Wrote %d protobuf level file(s)\n", levelCount)
 	}
 
 	// Copy explicitly listed libraries (e.g., Steam DLLs)

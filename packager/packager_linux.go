@@ -47,13 +47,34 @@ func packagePlatform(config PackageConfig) (string, error) {
 	}
 	fmt.Printf("  Copied binary to %s\n", targetBinary)
 
-	// Copy assets
+	// Copy assets (excluding YAML level files)
 	if _, err := os.Stat(config.AssetsDir); err == nil {
 		assetsTarget := filepath.Join(usrShareDir, "assets")
-		if err := copyDir(config.AssetsDir, assetsTarget); err != nil {
+		if err := copyDirExcludingLevels(config.AssetsDir, assetsTarget); err != nil {
 			return "", fmt.Errorf("copying assets: %w", err)
 		}
-		fmt.Printf("  Copied assets\n")
+		fmt.Printf("  Copied assets (excluding YAML level files)\n")
+	}
+
+	// Write protobuf level files to AppDir from iterator
+	if config.LevelIterator != nil {
+		assetsTarget := filepath.Join(usrShareDir, "assets")
+		levelCount := 0
+		for relPath, protoBytes := range config.LevelIterator {
+			targetPath := filepath.Join(assetsTarget, relPath)
+
+			// Ensure directory exists
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return "", fmt.Errorf("creating directory for level %s: %w", relPath, err)
+			}
+
+			// Write protobuf bytes immediately
+			if err := os.WriteFile(targetPath, protoBytes, 0644); err != nil {
+				return "", fmt.Errorf("writing level file %s: %w", relPath, err)
+			}
+			levelCount++
+		}
+		fmt.Printf("  Wrote %d protobuf level file(s)\n", levelCount)
 	}
 
 	// Copy any explicitly listed libraries
@@ -171,13 +192,28 @@ Terminal=false
 	}
 	fmt.Printf("  Copied %d libraries to lib/\n", len(libEntries))
 
-	// Copy assets to dist root
+	// Copy assets to dist root (excluding YAML level files)
 	if _, err := os.Stat(config.AssetsDir); err == nil {
 		assetsTarget := filepath.Join(distDir, "assets")
-		if err := copyDir(config.AssetsDir, assetsTarget); err != nil {
+		if err := copyDirExcludingLevels(config.AssetsDir, assetsTarget); err != nil {
 			return "", fmt.Errorf("copying assets to dist: %w", err)
 		}
-		fmt.Printf("  Copied assets to distribution directory\n")
+		fmt.Printf("  Copied assets to distribution directory (excluding YAML level files)\n")
+	}
+
+	// Copy protobuf level files from AppDir to dist (they were already written there)
+	if config.LevelIterator != nil {
+		appDirAssets := filepath.Join(usrShareDir, "assets", "levels")
+		distAssets := filepath.Join(distDir, "assets", "levels")
+
+		// Check if AppDir levels directory exists
+		if _, err := os.Stat(appDirAssets); err == nil {
+			// Copy the levels directory from AppDir to dist
+			if err := copyDir(appDirAssets, distAssets); err != nil {
+				return "", fmt.Errorf("copying level files to dist: %w", err)
+			}
+			fmt.Printf("  Copied protobuf level files to distribution directory\n")
+		}
 	}
 
 	// Create zip archive in the build directory
