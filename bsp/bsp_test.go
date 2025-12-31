@@ -31,7 +31,7 @@ func TestSimpleBox(t *testing.T) {
 
 	// Build the BSP tree
 	builder := NewBSPBuilder(polygons)
-	root := builder.Build()
+	levelData := builder.Build()
 
 	// Define test cases: points to test and their expected collision state
 	testCases := []TestCase{
@@ -73,7 +73,7 @@ func TestSimpleBox(t *testing.T) {
 	}
 
 	// Run all test cases
-	runTestCases(t, root, testCases)
+	runTestCases(t, levelData, testCases)
 }
 
 // TODO: Add more test cases below:
@@ -102,7 +102,7 @@ func TestLShapedRoom(t *testing.T) {
 	}
 
 	builder := NewBSPBuilder(polygons)
-	root := builder.Build()
+	levelData := builder.Build()
 
 	testCases := []TestCase{
 		{
@@ -132,7 +132,7 @@ func TestLShapedRoom(t *testing.T) {
 		},
 	}
 
-	runTestCases(t, root, testCases)
+	runTestCases(t, levelData, testCases)
 }
 
 // TestMultipleRooms tests multiple separate rooms
@@ -162,7 +162,7 @@ func TestMultipleRooms(t *testing.T) {
 	}
 
 	builder := NewBSPBuilder(polygons)
-	root := builder.Build()
+	levelData := builder.Build()
 
 	testCases := []TestCase{
 		{
@@ -187,7 +187,7 @@ func TestMultipleRooms(t *testing.T) {
 		},
 	}
 
-	runTestCases(t, root, testCases)
+	runTestCases(t, levelData, testCases)
 }
 
 // TestNestedBoxes tests boxes within boxes
@@ -217,7 +217,7 @@ func TestNestedBoxes(t *testing.T) {
 	}
 
 	builder := NewBSPBuilder(polygons)
-	root := builder.Build()
+	levelData := builder.Build()
 
 	testCases := []TestCase{
 		{
@@ -242,7 +242,7 @@ func TestNestedBoxes(t *testing.T) {
 		},
 	}
 
-	runTestCases(t, root, testCases)
+	runTestCases(t, levelData, testCases)
 }
 
 // TestConvexPolygon tests a convex polygon (e.g., hexagon)
@@ -263,7 +263,7 @@ func TestConvexPolygon(t *testing.T) {
 	}
 
 	builder := NewBSPBuilder(polygons)
-	root := builder.Build()
+	levelData := builder.Build()
 
 	testCases := []TestCase{
 		{
@@ -288,7 +288,7 @@ func TestConvexPolygon(t *testing.T) {
 		},
 	}
 
-	runTestCases(t, root, testCases)
+	runTestCases(t, levelData, testCases)
 }
 
 // TestConcavePolygon tests a concave polygon (will need to be split)
@@ -312,7 +312,7 @@ func TestConcavePolygon(t *testing.T) {
 	}
 
 	builder := NewBSPBuilder(polygons)
-	root := builder.Build()
+	levelData := builder.Build()
 
 	testCases := []TestCase{
 		{
@@ -342,7 +342,7 @@ func TestConcavePolygon(t *testing.T) {
 		},
 	}
 
-	runTestCases(t, root, testCases)
+	runTestCases(t, levelData, testCases)
 }
 
 // TestEmptySpace tests behavior with no geometry
@@ -351,7 +351,7 @@ func TestEmptySpace(t *testing.T) {
 	polygons := []Polygon{}
 
 	builder := NewBSPBuilder(polygons)
-	root := builder.Build()
+	levelData := builder.Build()
 
 	testCases := []TestCase{
 		{
@@ -371,7 +371,7 @@ func TestEmptySpace(t *testing.T) {
 		},
 	}
 
-	runTestCases(t, root, testCases)
+	runTestCases(t, levelData, testCases)
 }
 
 // TestCorridors tests narrow corridors between rooms
@@ -412,7 +412,7 @@ func TestCorridors(t *testing.T) {
 	}
 
 	builder := NewBSPBuilder(polygons)
-	root := builder.Build()
+	levelData := builder.Build()
 
 	testCases := []TestCase{
 		{
@@ -442,16 +442,16 @@ func TestCorridors(t *testing.T) {
 		},
 	}
 
-	runTestCases(t, root, testCases)
+	runTestCases(t, levelData, testCases)
 }
 
 // Helper Functions
 
 // runTestCases runs all test cases against the BSP tree
-func runTestCases(t *testing.T, root *pb.BSPNode, cases []TestCase) {
+func runTestCases(t *testing.T, levelData *pb.LevelData, cases []TestCase) {
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
-			result := PointInBSP(root, tc.Point)
+			result := PointInBSP(levelData.Nodes, levelData.RootIndex, tc.Point)
 			if result != tc.ExpectSolid {
 				t.Errorf("Point (%f, %f): expected solid=%v, got solid=%v",
 					tc.Point.X, tc.Point.Y, tc.ExpectSolid, result)

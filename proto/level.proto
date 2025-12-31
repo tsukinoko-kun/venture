@@ -5,10 +5,12 @@ package venture;
 option go_package = "github.com/bloodmagesoftware/venture/proto/level";
 
 message LevelData {
-  // We only need the top of the tree.
-  BSPNode root = 1;
+  // Store ALL nodes here in a flat list
+  repeated BSPNode nodes = 1;
+  // Index of the root node in the list above (-1 for empty tree)
+  int32 root_index = 2;
   // Ground tiles for visual rendering
-  repeated Tile ground = 2;
+  repeated Tile ground = 3;
 }
 
 message BSPNode {
@@ -25,10 +27,9 @@ message Split {
   float normal_y = 2;
   float distance = 3;
 
-  // Recursive: The children are themselves Nodes.
-  // No indices required; just nest the objects.
-  BSPNode front = 4;
-  BSPNode back = 5;
+  // Instead of nesting, point to the index in the 'nodes' array
+  int32 front_index = 4;
+  int32 back_index = 5;
 }
 
 message Leaf {

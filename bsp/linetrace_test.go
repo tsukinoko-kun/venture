@@ -15,10 +15,10 @@ type LineTraceResult struct {
 }
 
 // LineTraceBSP traces a line through a BSP tree and returns the first hit point
-func LineTraceBSP(root *pb.BSPNode, fromX, fromY, toX, toY float32) LineTraceResult {
+func LineTraceBSP(levelData *pb.LevelData, fromX, fromY, toX, toY float32) LineTraceResult {
 	from := Point{X: fromX, Y: fromY}
 	to := Point{X: toX, Y: toY}
-	hit, hitX, hitY := LineTraceBSPNode(root, from, to, 0.0, 1.0)
+	hit, hitX, hitY := LineTraceBSPNode(levelData.Nodes, levelData.RootIndex, from, to, 0.0, 1.0)
 	return LineTraceResult{Hit: hit, HitX: hitX, HitY: hitY}
 }
 
@@ -35,7 +35,7 @@ func TestLineTraceSimpleBox(t *testing.T) {
 	}
 
 	builder := NewBSPBuilder([]Polygon{poly})
-	root := builder.Build()
+	levelData := builder.Build()
 
 	tests := []struct {
 		name         string
@@ -122,7 +122,7 @@ func TestLineTraceSimpleBox(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := LineTraceBSP(root, tc.fromX, tc.fromY, tc.toX, tc.toY)
+			result := LineTraceBSP(levelData, tc.fromX, tc.fromY, tc.toX, tc.toY)
 
 			if result.Hit != tc.expectHit {
 				t.Errorf("Expected hit=%v, got hit=%v", tc.expectHit, result.Hit)
@@ -166,7 +166,7 @@ func TestLineTraceMultiplePolygons(t *testing.T) {
 	}
 
 	builder := NewBSPBuilder(polygons)
-	root := builder.Build()
+	levelData := builder.Build()
 
 	tests := []struct {
 		name         string
@@ -211,7 +211,7 @@ func TestLineTraceMultiplePolygons(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := LineTraceBSP(root, tc.fromX, tc.fromY, tc.toX, tc.toY)
+			result := LineTraceBSP(levelData, tc.fromX, tc.fromY, tc.toX, tc.toY)
 
 			if result.Hit != tc.expectHit {
 				t.Errorf("Expected hit=%v, got hit=%v", tc.expectHit, result.Hit)
@@ -254,7 +254,7 @@ func TestLineTraceLevelPolygons(t *testing.T) {
 	}
 
 	builder := NewBSPBuilder([]Polygon{poly2, poly3})
-	root := builder.Build()
+	levelData := builder.Build()
 
 	tests := []struct {
 		name         string
@@ -301,7 +301,7 @@ func TestLineTraceLevelPolygons(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := LineTraceBSP(root, tc.fromX, tc.fromY, tc.toX, tc.toY)
+			result := LineTraceBSP(levelData, tc.fromX, tc.fromY, tc.toX, tc.toY)
 
 			if result.Hit != tc.expectHit {
 				t.Errorf("Expected hit=%v, got hit=%v", tc.expectHit, result.Hit)

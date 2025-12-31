@@ -44,13 +44,13 @@ func TestBuildCollisionBSP(t *testing.T) {
 
 	// Test point inside polygon
 	point := bsp.Point{X: 0, Y: 0}
-	if !bsp.PointInBSP(editor.collisionTestBSP, point) {
+	if !bsp.PointInBSP(editor.collisionTestBSP.Nodes, editor.collisionTestBSP.RootIndex, point) {
 		t.Error("Point (0, 0) should be inside the solid polygon")
 	}
 
 	// Test point outside polygon
 	point = bsp.Point{X: 10, Y: 10}
-	if bsp.PointInBSP(editor.collisionTestBSP, point) {
+	if bsp.PointInBSP(editor.collisionTestBSP.Nodes, editor.collisionTestBSP.RootIndex, point) {
 		t.Error("Point (10, 10) should be outside the solid polygon")
 	}
 }

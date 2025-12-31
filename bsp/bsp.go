@@ -63,17 +63,19 @@ func (l Line) ClassifyPoint(p Point) int {
 // BSPBuilder holds the state for building a BSP tree
 type BSPBuilder struct {
 	Polygons []Polygon
+	nodes    []*pb.BSPNode // Flat array of all nodes
 }
 
 // NewBSPBuilder creates a new BSP builder with the given polygons
 func NewBSPBuilder(polygons []Polygon) *BSPBuilder {
 	return &BSPBuilder{
 		Polygons: polygons,
+		nodes:    make([]*pb.BSPNode, 0),
 	}
 }
 
-// Build constructs the BSP tree and returns the root node
-func (b *BSPBuilder) Build() *pb.BSPNode {
+// Build constructs the BSP tree and returns the level data with flat structure
+func (b *BSPBuilder) Build() *pb.LevelData {
 	// Step 1: Partition all polygons into convex sub-polygons
 	convexPolygons := make([]Polygon, 0)
 	for _, poly := range b.Polygons {
@@ -86,54 +88,62 @@ func (b *BSPBuilder) Build() *pb.BSPNode {
 
 	// Step 2: Build individual BSP trees for each polygon
 	// Then combine them with OR logic
-	var polyTrees []*pb.BSPNode
+	var polyTreeIndices []int32
 	for _, poly := range convexPolygons {
 		if poly.IsSolid && len(poly.Vertices) >= 3 {
-			polyTrees = append(polyTrees, buildConvexPolygonTree(poly))
+			idx := b.buildConvexPolygonTree(poly)
+			polyTreeIndices = append(polyTreeIndices, idx)
 		}
 	}
 
-	if len(polyTrees) == 0 {
-		return NewLeafNode(0, []int32{}, false)
+	var rootIndex int32
+	if len(polyTreeIndices) == 0 {
+		rootIndex = b.addLeafNode(0, []int32{}, false)
+	} else if len(polyTreeIndices) == 1 {
+		rootIndex = polyTreeIndices[0]
+	} else {
+		// Combine multiple trees with OR logic
+		rootIndex = b.mergeTrees(polyTreeIndices)
 	}
 
-	if len(polyTrees) == 1 {
-		return polyTrees[0]
+	return &pb.LevelData{
+		Nodes:     b.nodes,
+		RootIndex: rootIndex,
 	}
-
-	// Combine multiple trees with OR logic
-	return mergeTrees(polyTrees)
 }
 
 // mergeTrees combines multiple BSP trees with OR logic
 // A point is solid if it's solid in ANY of the trees
-func mergeTrees(trees []*pb.BSPNode) *pb.BSPNode {
-	if len(trees) == 0 {
-		return NewLeafNode(0, []int32{}, false)
+func (b *BSPBuilder) mergeTrees(treeIndices []int32) int32 {
+	if len(treeIndices) == 0 {
+		return b.addLeafNode(0, []int32{}, false)
 	}
 
-	if len(trees) == 1 {
-		return trees[0]
+	if len(treeIndices) == 1 {
+		return treeIndices[0]
 	}
 
 	// Take the first tree and use its splitting planes
 	// Then recursively merge the rest
-	first := trees[0]
-	rest := trees[1:]
+	first := treeIndices[0]
+	rest := treeIndices[1:]
 
-	return mergeTreePair(first, mergeTrees(rest))
+	return b.mergeTreePair(first, b.mergeTrees(rest))
 }
 
 // mergeTreePair merges two BSP trees with OR logic
-func mergeTreePair(tree1, tree2 *pb.BSPNode) *pb.BSPNode {
+func (b *BSPBuilder) mergeTreePair(tree1Idx, tree2Idx int32) int32 {
+	tree1 := b.nodes[tree1Idx]
+	_ = b.nodes[tree2Idx] // tree2 accessed through methods
+
 	// If tree1 is a leaf
 	if leaf1, ok := tree1.Type.(*pb.BSPNode_Leaf); ok {
 		if leaf1.Leaf.IsSolid {
 			// tree1 is solid everywhere - return solid
-			return tree1
+			return tree1Idx
 		}
 		// tree1 is non-solid everywhere - return tree2
-		return tree2
+		return tree2Idx
 	}
 
 	// tree1 is a split node
@@ -144,37 +154,37 @@ func mergeTreePair(tree1, tree2 *pb.BSPNode) *pb.BSPNode {
 	}
 
 	// Split tree2 along tree1's plane
-	tree2Front, tree2Back := splitTree(tree2, line)
+	tree2FrontIdx, tree2BackIdx := b.splitTree(tree2Idx, line)
 
 	// Recursively merge
-	frontMerged := mergeTreePair(split1.Front, tree2Front)
-	backMerged := mergeTreePair(split1.Back, tree2Back)
+	frontMerged := b.mergeTreePair(split1.FrontIndex, tree2FrontIdx)
+	backMerged := b.mergeTreePair(split1.BackIndex, tree2BackIdx)
 
-	return NewSplitNode(split1.NormalX, split1.NormalY, split1.Distance, frontMerged, backMerged)
+	return b.addSplitNode(split1.NormalX, split1.NormalY, split1.Distance, frontMerged, backMerged)
 }
 
 // splitTree splits a BSP tree along a plane
-// Returns the front and back subtrees
-func splitTree(tree *pb.BSPNode, splitLine Line) (*pb.BSPNode, *pb.BSPNode) {
+// Returns the front and back subtrees (as indices)
+func (b *BSPBuilder) splitTree(treeIdx int32, splitLine Line) (int32, int32) {
+	tree := b.nodes[treeIdx]
+	
 	// If tree is a leaf, return it for both sides
 	if _, ok := tree.Type.(*pb.BSPNode_Leaf); ok {
-		return tree, tree
+		return treeIdx, treeIdx
 	}
 
 	// tree is a split node
-	_ = tree.Type.(*pb.BSPNode_Split).Split
-
 	// For simplicity, just return the tree as-is for both sides
 	// A proper implementation would classify the split plane relative to splitLine
 	// For now, this is a conservative approximation
-	return tree, tree
+	return treeIdx, treeIdx
 }
 
 // buildConvexPolygonTree builds a BSP tree that returns true iff point is inside polygon
 // For a CCW convex polygon, a point is inside if it's on the left/inside of all edges
-func buildConvexPolygonTree(poly Polygon) *pb.BSPNode {
+func (b *BSPBuilder) buildConvexPolygonTree(poly Polygon) int32 {
 	if len(poly.Vertices) < 3 {
-		return NewLeafNode(0, []int32{}, false)
+		return b.addLeafNode(0, []int32{}, false)
 	}
 
 	// Detect winding order and normalize to CCW if needed
@@ -182,7 +192,7 @@ func buildConvexPolygonTree(poly Polygon) *pb.BSPNode {
 	normalizedPoly := ensureCCW(poly)
 
 	// Build nested tests: must be on inside of ALL edges
-	return buildEdgeTest(normalizedPoly, 0)
+	return b.buildEdgeTest(normalizedPoly, 0)
 }
 
 // signedArea computes the signed area of a polygon
@@ -230,10 +240,10 @@ func ensureCCW(poly Polygon) Polygon {
 
 // buildEdgeTest recursively builds edge tests for a convex polygon
 // A point must be on the "inside" of all edges to be considered inside the polygon
-func buildEdgeTest(poly Polygon, edgeIdx int) *pb.BSPNode {
+func (b *BSPBuilder) buildEdgeTest(poly Polygon, edgeIdx int) int32 {
 	if edgeIdx >= len(poly.Vertices) {
 		// Passed all edge tests - point is inside!
-		return NewLeafNode(0, []int32{}, true)
+		return b.addLeafNode(0, []int32{}, true)
 	}
 
 	// Get edge vertices
@@ -268,10 +278,10 @@ func buildEdgeTest(poly Polygon, edgeIdx int) *pb.BSPNode {
 	//
 	// So: back side = inside, front side = outside
 
-	frontNode := NewLeafNode(0, []int32{}, false) // Front = outside
-	backNode := buildEdgeTest(poly, edgeIdx+1)    // Back = might be inside, check next edge
+	frontNodeIdx := b.addLeafNode(0, []int32{}, false) // Front = outside
+	backNodeIdx := b.buildEdgeTest(poly, edgeIdx+1)    // Back = might be inside, check next edge
 
-	return NewSplitNode(line.Normal.X, line.Normal.Y, line.Distance, frontNode, backNode)
+	return b.addSplitNode(line.Normal.X, line.Normal.Y, line.Distance, frontNodeIdx, backNodeIdx)
 }
 
 // mergeOR creates a tree that returns true if EITHER subtree returns true
@@ -421,7 +431,12 @@ func splitPolygon(poly Polygon, line Line) (*Polygon, *Polygon) {
 }
 
 // PointInBSP tests if a point is inside solid geometry using the BSP tree
-func PointInBSP(node *pb.BSPNode, point Point) bool {
+func PointInBSP(nodes []*pb.BSPNode, nodeIndex int32, point Point) bool {
+	if nodeIndex < 0 || int(nodeIndex) >= len(nodes) {
+		return false
+	}
+
+	node := nodes[nodeIndex]
 	if node == nil {
 		return false
 	}
@@ -442,11 +457,11 @@ func PointInBSP(node *pb.BSPNode, point Point) bool {
 		side := line.PointSide(point)
 		if side > 0 {
 			// Point is strictly on the front side
-			return PointInBSP(split.Front, point)
+			return PointInBSP(nodes, split.FrontIndex, point)
 		} else {
 			// Point is on the back side or exactly on the line
 			// For solid geometry BSP, points on the boundary are considered inside
-			return PointInBSP(split.Back, point)
+			return PointInBSP(nodes, split.BackIndex, point)
 		}
 
 	default:
@@ -457,7 +472,12 @@ func PointInBSP(node *pb.BSPNode, point Point) bool {
 // LineTraceBSPNode traces a line segment through a BSP tree
 // Returns true and hit point if the line hits solid geometry
 // The segment is defined by the parametric range [t0, t1] on the line from `from` to `to`
-func LineTraceBSPNode(node *pb.BSPNode, from, to Point, t0, t1 float32) (hit bool, hitX, hitY float32) {
+func LineTraceBSPNode(nodes []*pb.BSPNode, nodeIndex int32, from, to Point, t0, t1 float32) (hit bool, hitX, hitY float32) {
+	if nodeIndex < 0 || int(nodeIndex) >= len(nodes) {
+		return false, 0, 0
+	}
+
+	node := nodes[nodeIndex]
 	if node == nil {
 		return false, 0, 0
 	}
@@ -494,12 +514,12 @@ func LineTraceBSPNode(node *pb.BSPNode, from, to Point, t0, t1 float32) (hit boo
 
 		// Both points on front side
 		if d0 > epsilon && d1 > epsilon {
-			return LineTraceBSPNode(split.Front, from, to, t0, t1)
+			return LineTraceBSPNode(nodes, split.FrontIndex, from, to, t0, t1)
 		}
 
 		// Both points on back side
 		if d0 <= epsilon && d1 <= epsilon {
-			return LineTraceBSPNode(split.Back, from, to, t0, t1)
+			return LineTraceBSPNode(nodes, split.BackIndex, from, to, t0, t1)
 		}
 
 		// Line segment spans the plane - compute intersection
@@ -511,33 +531,67 @@ func LineTraceBSPNode(node *pb.BSPNode, from, to Point, t0, t1 float32) (hit boo
 		tMid := t0 + t*(t1-t0)
 
 		// Determine traversal order (near to far based on segment start)
-		var nearNode, farNode *pb.BSPNode
+		var nearIndex, farIndex int32
 		if d0 > 0 {
 			// Segment starts in front
-			nearNode = split.Front
-			farNode = split.Back
+			nearIndex = split.FrontIndex
+			farIndex = split.BackIndex
 		} else {
 			// Segment starts in back
-			nearNode = split.Back
-			farNode = split.Front
+			nearIndex = split.BackIndex
+			farIndex = split.FrontIndex
 		}
 
 		// Check near side first (from t0 to tMid)
-		hit, hitX, hitY = LineTraceBSPNode(nearNode, from, to, t0, tMid)
+		hit, hitX, hitY = LineTraceBSPNode(nodes, nearIndex, from, to, t0, tMid)
 		if hit {
 			return true, hitX, hitY
 		}
 
 		// Check far side (from tMid to t1)
-		return LineTraceBSPNode(farNode, from, to, tMid, t1)
+		return LineTraceBSPNode(nodes, farIndex, from, to, tMid, t1)
 	}
 
 	return false, 0, 0
 }
 
-// Helper functions for creating protobuf nodes
+// Helper functions for creating protobuf nodes in flat array
 
-// NewLeafNode creates a new leaf node
+// addLeafNode creates a new leaf node and adds it to the flat array
+func (b *BSPBuilder) addLeafNode(sectorID int32, polygonIndices []int32, isSolid bool) int32 {
+	idx := int32(len(b.nodes))
+	node := &pb.BSPNode{
+		Type: &pb.BSPNode_Leaf{
+			Leaf: &pb.Leaf{
+				SectorId:       sectorID,
+				PolygonIndices: polygonIndices,
+				IsSolid:        isSolid,
+			},
+		},
+	}
+	b.nodes = append(b.nodes, node)
+	return idx
+}
+
+// addSplitNode creates a new split node and adds it to the flat array
+func (b *BSPBuilder) addSplitNode(normalX, normalY, distance float32, frontIdx, backIdx int32) int32 {
+	idx := int32(len(b.nodes))
+	node := &pb.BSPNode{
+		Type: &pb.BSPNode_Split{
+			Split: &pb.Split{
+				NormalX:    normalX,
+				NormalY:    normalY,
+				Distance:   distance,
+				FrontIndex: frontIdx,
+				BackIndex:  backIdx,
+			},
+		},
+	}
+	b.nodes = append(b.nodes, node)
+	return idx
+}
+
+// NewLeafNode creates a new leaf node (deprecated - for backward compatibility)
 func NewLeafNode(sectorID int32, polygonIndices []int32, isSolid bool) *pb.BSPNode {
 	return &pb.BSPNode{
 		Type: &pb.BSPNode_Leaf{
@@ -550,7 +604,7 @@ func NewLeafNode(sectorID int32, polygonIndices []int32, isSolid bool) *pb.BSPNo
 	}
 }
 
-// NewSplitNode creates a new split node
+// NewSplitNode creates a new split node (deprecated - for backward compatibility)
 func NewSplitNode(normalX, normalY, distance float32, front, back *pb.BSPNode) *pb.BSPNode {
 	return &pb.BSPNode{
 		Type: &pb.BSPNode_Split{
@@ -558,16 +612,16 @@ func NewSplitNode(normalX, normalY, distance float32, front, back *pb.BSPNode) *
 				NormalX:  normalX,
 				NormalY:  normalY,
 				Distance: distance,
-				Front:    front,
-				Back:     back,
+				// Note: FrontIndex and BackIndex should be set by caller if using flat structure
 			},
 		},
 	}
 }
 
-// NewLevelData creates a new level data protobuf with the given root node
-func NewLevelData(root *pb.BSPNode) *pb.LevelData {
+// NewLevelData creates a new level data protobuf with the given nodes and root index
+func NewLevelData(nodes []*pb.BSPNode, rootIndex int32) *pb.LevelData {
 	return &pb.LevelData{
-		Root: root,
+		Nodes:     nodes,
+		RootIndex: rootIndex,
 	}
 }

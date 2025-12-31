@@ -744,7 +744,7 @@ func (e *Editor) handleCollisionTest(gtx layout.Context, mouseX, mouseY float32)
 
 	// Test point collision
 	point := bsp.Point{X: worldX, Y: worldY}
-	isSolid := bsp.PointInBSP(e.collisionTestBSP, point)
+	isSolid := bsp.PointInBSP(e.collisionTestBSP.Nodes, e.collisionTestBSP.RootIndex, point)
 
 	// Create result with point test
 	result := collisionTestResult{

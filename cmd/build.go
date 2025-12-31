@@ -184,7 +184,7 @@ func convertLevelToProto(yamlLevel *level.Level) (*pb.LevelData, error) {
 
 	// Build BSP tree
 	builder := bsp.NewBSPBuilder(bspPolygons)
-	bspRoot := builder.Build()
+	bspLevelData := builder.Build()
 
 	// Convert ground tiles
 	groundTiles := make([]*pb.Tile, len(yamlLevel.Ground))
@@ -198,10 +198,11 @@ func convertLevelToProto(yamlLevel *level.Level) (*pb.LevelData, error) {
 		}
 	}
 
-	// Create level data
+	// Create level data with BSP nodes and ground tiles
 	levelData := &pb.LevelData{
-		Root:   bspRoot,
-		Ground: groundTiles,
+		Nodes:     bspLevelData.Nodes,
+		RootIndex: bspLevelData.RootIndex,
+		Ground:    groundTiles,
 	}
 
 	return levelData, nil

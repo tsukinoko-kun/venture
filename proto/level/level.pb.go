@@ -23,10 +23,12 @@ const (
 
 type LevelData struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// We only need the top of the tree.
-	Root *BSPNode `protobuf:"bytes,1,opt,name=root,proto3" json:"root,omitempty"`
+	// Store ALL nodes here in a flat list
+	Nodes []*BSPNode `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	// Index of the root node in the list above (-1 for empty tree)
+	RootIndex int32 `protobuf:"varint,2,opt,name=root_index,json=rootIndex,proto3" json:"root_index,omitempty"`
 	// Ground tiles for visual rendering
-	Ground        []*Tile `protobuf:"bytes,2,rep,name=ground,proto3" json:"ground,omitempty"`
+	Ground        []*Tile `protobuf:"bytes,3,rep,name=ground,proto3" json:"ground,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -61,11 +63,18 @@ func (*LevelData) Descriptor() ([]byte, []int) {
 	return file_level_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *LevelData) GetRoot() *BSPNode {
+func (x *LevelData) GetNodes() []*BSPNode {
 	if x != nil {
-		return x.Root
+		return x.Nodes
 	}
 	return nil
+}
+
+func (x *LevelData) GetRootIndex() int32 {
+	if x != nil {
+		return x.RootIndex
+	}
+	return 0
 }
 
 func (x *LevelData) GetGround() []*Tile {
@@ -165,10 +174,9 @@ type Split struct {
 	NormalX  float32 `protobuf:"fixed32,1,opt,name=normal_x,json=normalX,proto3" json:"normal_x,omitempty"`
 	NormalY  float32 `protobuf:"fixed32,2,opt,name=normal_y,json=normalY,proto3" json:"normal_y,omitempty"`
 	Distance float32 `protobuf:"fixed32,3,opt,name=distance,proto3" json:"distance,omitempty"`
-	// Recursive: The children are themselves Nodes.
-	// No indices required; just nest the objects.
-	Front         *BSPNode `protobuf:"bytes,4,opt,name=front,proto3" json:"front,omitempty"`
-	Back          *BSPNode `protobuf:"bytes,5,opt,name=back,proto3" json:"back,omitempty"`
+	// Instead of nesting, point to the index in the 'nodes' array
+	FrontIndex    int32 `protobuf:"varint,4,opt,name=front_index,json=frontIndex,proto3" json:"front_index,omitempty"`
+	BackIndex     int32 `protobuf:"varint,5,opt,name=back_index,json=backIndex,proto3" json:"back_index,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -224,18 +232,18 @@ func (x *Split) GetDistance() float32 {
 	return 0
 }
 
-func (x *Split) GetFront() *BSPNode {
+func (x *Split) GetFrontIndex() int32 {
 	if x != nil {
-		return x.Front
+		return x.FrontIndex
 	}
-	return nil
+	return 0
 }
 
-func (x *Split) GetBack() *BSPNode {
+func (x *Split) GetBackIndex() int32 {
 	if x != nil {
-		return x.Back
+		return x.BackIndex
 	}
-	return nil
+	return 0
 }
 
 type Leaf struct {
@@ -407,20 +415,24 @@ var File_level_proto protoreflect.FileDescriptor
 
 const file_level_proto_rawDesc = "" +
 	"\n" +
-	"\vlevel.proto\x12\aventure\"X\n" +
-	"\tLevelData\x12$\n" +
-	"\x04root\x18\x01 \x01(\v2\x10.venture.BSPNodeR\x04root\x12%\n" +
-	"\x06ground\x18\x02 \x03(\v2\r.venture.TileR\x06ground\"^\n" +
+	"\vlevel.proto\x12\aventure\"y\n" +
+	"\tLevelData\x12&\n" +
+	"\x05nodes\x18\x01 \x03(\v2\x10.venture.BSPNodeR\x05nodes\x12\x1d\n" +
+	"\n" +
+	"root_index\x18\x02 \x01(\x05R\trootIndex\x12%\n" +
+	"\x06ground\x18\x03 \x03(\v2\r.venture.TileR\x06ground\"^\n" +
 	"\aBSPNode\x12&\n" +
 	"\x05split\x18\x01 \x01(\v2\x0e.venture.SplitH\x00R\x05split\x12#\n" +
 	"\x04leaf\x18\x02 \x01(\v2\r.venture.LeafH\x00R\x04leafB\x06\n" +
-	"\x04type\"\xa7\x01\n" +
+	"\x04type\"\x99\x01\n" +
 	"\x05Split\x12\x19\n" +
 	"\bnormal_x\x18\x01 \x01(\x02R\anormalX\x12\x19\n" +
 	"\bnormal_y\x18\x02 \x01(\x02R\anormalY\x12\x1a\n" +
-	"\bdistance\x18\x03 \x01(\x02R\bdistance\x12&\n" +
-	"\x05front\x18\x04 \x01(\v2\x10.venture.BSPNodeR\x05front\x12$\n" +
-	"\x04back\x18\x05 \x01(\v2\x10.venture.BSPNodeR\x04back\"g\n" +
+	"\bdistance\x18\x03 \x01(\x02R\bdistance\x12\x1f\n" +
+	"\vfront_index\x18\x04 \x01(\x05R\n" +
+	"frontIndex\x12\x1d\n" +
+	"\n" +
+	"back_index\x18\x05 \x01(\x05R\tbackIndex\"g\n" +
 	"\x04Leaf\x12\x1b\n" +
 	"\tsector_id\x18\x01 \x01(\x05R\bsectorId\x12'\n" +
 	"\x0fpolygon_indices\x18\x02 \x03(\x05R\x0epolygonIndices\x12\x19\n" +
@@ -454,18 +466,16 @@ var file_level_proto_goTypes = []any{
 	(*Tile)(nil),      // 5: venture.Tile
 }
 var file_level_proto_depIdxs = []int32{
-	1, // 0: venture.LevelData.root:type_name -> venture.BSPNode
+	1, // 0: venture.LevelData.nodes:type_name -> venture.BSPNode
 	5, // 1: venture.LevelData.ground:type_name -> venture.Tile
 	2, // 2: venture.BSPNode.split:type_name -> venture.Split
 	3, // 3: venture.BSPNode.leaf:type_name -> venture.Leaf
-	1, // 4: venture.Split.front:type_name -> venture.BSPNode
-	1, // 5: venture.Split.back:type_name -> venture.BSPNode
-	4, // 6: venture.Tile.position:type_name -> venture.Vec2i
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	4, // 4: venture.Tile.position:type_name -> venture.Vec2i
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_level_proto_init() }

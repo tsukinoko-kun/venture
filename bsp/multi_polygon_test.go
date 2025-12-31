@@ -33,29 +33,29 @@ func TestMultiPolygonBug(t *testing.T) {
 		}
 
 		builder := NewBSPBuilder(polygons)
-		root := builder.Build()
+		levelData := builder.Build()
 
 		// Test point in first box
 		p1 := Point{X: -7, Y: -7}
-		if !PointInBSP(root, p1) {
+		if !PointInBSP(levelData.Nodes, levelData.RootIndex, p1) {
 			t.Errorf("Point (%v, %v) should be SOLID (in first box)", p1.X, p1.Y)
 		}
 
 		// Test point in second box - THIS IS THE KEY TEST
 		p2 := Point{X: 7, Y: 7}
-		if !PointInBSP(root, p2) {
+		if !PointInBSP(levelData.Nodes, levelData.RootIndex, p2) {
 			t.Errorf("Point (%v, %v) should be SOLID (in second box) - SECOND BOX BEING IGNORED!", p2.X, p2.Y)
 		}
 
 		// Test point between boxes (should be empty)
 		p3 := Point{X: 0, Y: 0}
-		if PointInBSP(root, p3) {
+		if PointInBSP(levelData.Nodes, levelData.RootIndex, p3) {
 			t.Errorf("Point (%v, %v) should be EMPTY (between boxes)", p3.X, p3.Y)
 		}
 
 		// Test point outside both
 		p4 := Point{X: 20, Y: 20}
-		if PointInBSP(root, p4) {
+		if PointInBSP(levelData.Nodes, levelData.RootIndex, p4) {
 			t.Errorf("Point (%v, %v) should be EMPTY (outside both boxes)", p4.X, p4.Y)
 		}
 	})
@@ -96,7 +96,7 @@ func TestMultiPolygonBug(t *testing.T) {
 		}
 
 		builder := NewBSPBuilder(polygons)
-		root := builder.Build()
+		levelData := builder.Build()
 
 		tests := []struct {
 			name        string
@@ -112,7 +112,7 @@ func TestMultiPolygonBug(t *testing.T) {
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				result := PointInBSP(root, tc.point)
+				result := PointInBSP(levelData.Nodes, levelData.RootIndex, tc.point)
 				if result != tc.expectSolid {
 					t.Errorf("Point (%v, %v): got solid=%v, want solid=%v",
 						tc.point.X, tc.point.Y, result, tc.expectSolid)
@@ -154,7 +154,7 @@ func TestMultiPolygonBug(t *testing.T) {
 		}
 
 		builder := NewBSPBuilder(polygons)
-		root := builder.Build()
+		levelData := builder.Build()
 
 		tests := []struct {
 			name        string
@@ -170,7 +170,7 @@ func TestMultiPolygonBug(t *testing.T) {
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				result := PointInBSP(root, tc.point)
+				result := PointInBSP(levelData.Nodes, levelData.RootIndex, tc.point)
 				if result != tc.expectSolid {
 					t.Errorf("Point (%v, %v): got solid=%v, want solid=%v",
 						tc.point.X, tc.point.Y, result, tc.expectSolid)
@@ -217,12 +217,12 @@ func TestIndividualPolygonsVsMerged(t *testing.T) {
 	// Test point in poly1
 	p1 := Point{X: 1, Y: 1}
 	t.Run("Point in poly1 - individual tree", func(t *testing.T) {
-		if !PointInBSP(tree1, p1) {
+		if !PointInBSP(tree1.Nodes, tree1.RootIndex, p1) {
 			t.Error("Should be solid in tree1")
 		}
 	})
 	t.Run("Point in poly1 - merged tree", func(t *testing.T) {
-		if !PointInBSP(treeBoth, p1) {
+		if !PointInBSP(treeBoth.Nodes, treeBoth.RootIndex, p1) {
 			t.Error("Should be solid in merged tree")
 		}
 	})
@@ -230,12 +230,12 @@ func TestIndividualPolygonsVsMerged(t *testing.T) {
 	// Test point in poly2
 	p2 := Point{X: 11, Y: 11}
 	t.Run("Point in poly2 - individual tree", func(t *testing.T) {
-		if !PointInBSP(tree2, p2) {
+		if !PointInBSP(tree2.Nodes, tree2.RootIndex, p2) {
 			t.Error("Should be solid in tree2")
 		}
 	})
 	t.Run("Point in poly2 - merged tree", func(t *testing.T) {
-		if !PointInBSP(treeBoth, p2) {
+		if !PointInBSP(treeBoth.Nodes, treeBoth.RootIndex, p2) {
 			t.Error("Should be solid in merged tree - BUG: SECOND POLYGON IGNORED!")
 		}
 	})
@@ -243,17 +243,17 @@ func TestIndividualPolygonsVsMerged(t *testing.T) {
 	// Test point between polys
 	p3 := Point{X: 5, Y: 5}
 	t.Run("Point between - individual tree1", func(t *testing.T) {
-		if PointInBSP(tree1, p3) {
+		if PointInBSP(tree1.Nodes, tree1.RootIndex, p3) {
 			t.Error("Should be empty in tree1")
 		}
 	})
 	t.Run("Point between - individual tree2", func(t *testing.T) {
-		if PointInBSP(tree2, p3) {
+		if PointInBSP(tree2.Nodes, tree2.RootIndex, p3) {
 			t.Error("Should be empty in tree2")
 		}
 	})
 	t.Run("Point between - merged tree", func(t *testing.T) {
-		if PointInBSP(treeBoth, p3) {
+		if PointInBSP(treeBoth.Nodes, treeBoth.RootIndex, p3) {
 			t.Error("Should be empty in merged tree")
 		}
 	})
