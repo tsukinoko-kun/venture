@@ -407,29 +407,29 @@ var File_level_proto protoreflect.FileDescriptor
 
 const file_level_proto_rawDesc = "" +
 	"\n" +
-	"\vlevel.proto\x12\x05level\"T\n" +
-	"\tLevelData\x12\"\n" +
-	"\x04root\x18\x01 \x01(\v2\x0e.level.BSPNodeR\x04root\x12#\n" +
-	"\x06ground\x18\x02 \x03(\v2\v.level.TileR\x06ground\"Z\n" +
-	"\aBSPNode\x12$\n" +
-	"\x05split\x18\x01 \x01(\v2\f.level.SplitH\x00R\x05split\x12!\n" +
-	"\x04leaf\x18\x02 \x01(\v2\v.level.LeafH\x00R\x04leafB\x06\n" +
-	"\x04type\"\xa3\x01\n" +
+	"\vlevel.proto\x12\aventure\"X\n" +
+	"\tLevelData\x12$\n" +
+	"\x04root\x18\x01 \x01(\v2\x10.venture.BSPNodeR\x04root\x12%\n" +
+	"\x06ground\x18\x02 \x03(\v2\r.venture.TileR\x06ground\"^\n" +
+	"\aBSPNode\x12&\n" +
+	"\x05split\x18\x01 \x01(\v2\x0e.venture.SplitH\x00R\x05split\x12#\n" +
+	"\x04leaf\x18\x02 \x01(\v2\r.venture.LeafH\x00R\x04leafB\x06\n" +
+	"\x04type\"\xa7\x01\n" +
 	"\x05Split\x12\x19\n" +
 	"\bnormal_x\x18\x01 \x01(\x02R\anormalX\x12\x19\n" +
 	"\bnormal_y\x18\x02 \x01(\x02R\anormalY\x12\x1a\n" +
-	"\bdistance\x18\x03 \x01(\x02R\bdistance\x12$\n" +
-	"\x05front\x18\x04 \x01(\v2\x0e.level.BSPNodeR\x05front\x12\"\n" +
-	"\x04back\x18\x05 \x01(\v2\x0e.level.BSPNodeR\x04back\"g\n" +
+	"\bdistance\x18\x03 \x01(\x02R\bdistance\x12&\n" +
+	"\x05front\x18\x04 \x01(\v2\x10.venture.BSPNodeR\x05front\x12$\n" +
+	"\x04back\x18\x05 \x01(\v2\x10.venture.BSPNodeR\x04back\"g\n" +
 	"\x04Leaf\x12\x1b\n" +
 	"\tsector_id\x18\x01 \x01(\x05R\bsectorId\x12'\n" +
 	"\x0fpolygon_indices\x18\x02 \x03(\x05R\x0epolygonIndices\x12\x19\n" +
 	"\bis_solid\x18\x03 \x01(\bR\aisSolid\"#\n" +
 	"\x05Vec2i\x12\f\n" +
 	"\x01x\x18\x01 \x01(\x05R\x01x\x12\f\n" +
-	"\x01y\x18\x02 \x01(\x05R\x01y\"J\n" +
-	"\x04Tile\x12(\n" +
-	"\bposition\x18\x01 \x01(\v2\f.level.Vec2iR\bposition\x12\x18\n" +
+	"\x01y\x18\x02 \x01(\x05R\x01y\"L\n" +
+	"\x04Tile\x12*\n" +
+	"\bposition\x18\x01 \x01(\v2\x0e.venture.Vec2iR\bposition\x12\x18\n" +
 	"\atexture\x18\x02 \x01(\tR\atextureB2Z0github.com/bloodmagesoftware/venture/proto/levelb\x06proto3"
 
 var (
@@ -446,21 +446,21 @@ func file_level_proto_rawDescGZIP() []byte {
 
 var file_level_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_level_proto_goTypes = []any{
-	(*LevelData)(nil), // 0: level.LevelData
-	(*BSPNode)(nil),   // 1: level.BSPNode
-	(*Split)(nil),     // 2: level.Split
-	(*Leaf)(nil),      // 3: level.Leaf
-	(*Vec2I)(nil),     // 4: level.Vec2i
-	(*Tile)(nil),      // 5: level.Tile
+	(*LevelData)(nil), // 0: venture.LevelData
+	(*BSPNode)(nil),   // 1: venture.BSPNode
+	(*Split)(nil),     // 2: venture.Split
+	(*Leaf)(nil),      // 3: venture.Leaf
+	(*Vec2I)(nil),     // 4: venture.Vec2i
+	(*Tile)(nil),      // 5: venture.Tile
 }
 var file_level_proto_depIdxs = []int32{
-	1, // 0: level.LevelData.root:type_name -> level.BSPNode
-	5, // 1: level.LevelData.ground:type_name -> level.Tile
-	2, // 2: level.BSPNode.split:type_name -> level.Split
-	3, // 3: level.BSPNode.leaf:type_name -> level.Leaf
-	1, // 4: level.Split.front:type_name -> level.BSPNode
-	1, // 5: level.Split.back:type_name -> level.BSPNode
-	4, // 6: level.Tile.position:type_name -> level.Vec2i
+	1, // 0: venture.LevelData.root:type_name -> venture.BSPNode
+	5, // 1: venture.LevelData.ground:type_name -> venture.Tile
+	2, // 2: venture.BSPNode.split:type_name -> venture.Split
+	3, // 3: venture.BSPNode.leaf:type_name -> venture.Leaf
+	1, // 4: venture.Split.front:type_name -> venture.BSPNode
+	1, // 5: venture.Split.back:type_name -> venture.BSPNode
+	4, // 6: venture.Tile.position:type_name -> venture.Vec2i
 	7, // [7:7] is the sub-list for method output_type
 	7, // [7:7] is the sub-list for method input_type
 	7, // [7:7] is the sub-list for extension type_name

@@ -17,6 +17,7 @@ import (
 	"github.com/bloodmagesoftware/venture/packager"
 	"github.com/bloodmagesoftware/venture/platform"
 	"github.com/bloodmagesoftware/venture/project"
+	myproto "github.com/bloodmagesoftware/venture/proto"
 	pb "github.com/bloodmagesoftware/venture/proto/level"
 	"github.com/bloodmagesoftware/venture/protobuf"
 	"github.com/bloodmagesoftware/venture/steamworks"
@@ -54,26 +55,32 @@ var buildCmd = &cobra.Command{
 
 		fmt.Printf("Building for current platform: %s, platform: %s\n", target, buildPlatform)
 
-		// Step 1: Lint
+		// Lint
 		srcDir := filepath.Join(projectRoot, "src")
 		vendorDir := filepath.Join(projectRoot, "vendor")
 		if err := linter.Lint(srcDir, vendorDir); err != nil {
 			return fmt.Errorf("linting: %w", err)
 		}
 
-		// Step 2: Generate protobuf
+		// Placing Level Protobuf
+		levelProtoPath := filepath.Join(projectRoot, "proto", "level.proto")
+		if err := os.WriteFile(levelProtoPath, myproto.LevelProto, 0644); err != nil {
+			return fmt.Errorf("writing level protobuf: %w", err)
+		}
+
+		// Generate protobuf
 		protoDir := filepath.Join(projectRoot, "proto")
 		generatedDir := filepath.Join(srcDir, "generated")
 		if err := protobuf.Generate(protoDir, generatedDir); err != nil {
 			return fmt.Errorf("generating protobuf: %w", err)
 		}
 
-		// Step 2.5: Create level building iterator
+		// Create level building iterator
 		fmt.Println("Preparing level conversion with 30s timeout per level...")
 		assetsDir := filepath.Join(projectRoot, "assets")
 		levelIterator := buildLevelsIterator(assetsDir)
 
-		// Step 3: Compile Clay
+		// Compile Clay
 		clayDir := filepath.Join(projectRoot, "vendor", "clay")
 
 		clayObject, err := clay.Compile(clayDir, target)
@@ -82,7 +89,7 @@ var buildCmd = &cobra.Command{
 		}
 		fmt.Printf("Clay object file: %s\n", clayObject)
 
-		// Step 4: Ensure Steam libraries (if platform is steam)
+		// Ensure Steam libraries (if platform is steam)
 		fmt.Println("Checking Steam libraries...")
 		var steamLib *steamworks.LibraryInfo
 		if buildPlatform == "steam" {
@@ -93,7 +100,7 @@ var buildCmd = &cobra.Command{
 			}
 		}
 
-		// Step 5: Compile Odin
+		// Compile Odin
 		fmt.Println("Starting Odin compilation...")
 		outputName := platform.GetOutputName(target, config.BinaryName)
 		outputPath := filepath.Join(projectRoot, outputName)
@@ -114,7 +121,7 @@ var buildCmd = &cobra.Command{
 		}
 		fmt.Println("Odin compilation completed successfully")
 
-		// Step 6: Package for distribution
+		// Package for distribution
 		fmt.Println("Starting packaging...")
 		buildDir := filepath.Join(projectRoot, "build")
 

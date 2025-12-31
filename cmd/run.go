@@ -11,6 +11,7 @@ import (
 	"github.com/bloodmagesoftware/venture/odin"
 	"github.com/bloodmagesoftware/venture/platform"
 	"github.com/bloodmagesoftware/venture/project"
+	myproto "github.com/bloodmagesoftware/venture/proto"
 	"github.com/bloodmagesoftware/venture/protobuf"
 	"github.com/bloodmagesoftware/venture/steamworks"
 	"github.com/spf13/cobra"
@@ -44,28 +45,34 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("detecting current platform: %w", err)
 		}
 
-		// Step 1: Lint
+		// Lint
 		srcDir := filepath.Join(projectRoot, "src")
 		vendorDir := filepath.Join(projectRoot, "vendor")
 		if err := linter.Lint(srcDir, vendorDir); err != nil {
 			return fmt.Errorf("linting: %w", err)
 		}
 
-		// Step 2: Generate protobuf
+		// Placing Level Protobuf
+		levelProtoPath := filepath.Join(projectRoot, "proto", "level.proto")
+		if err := os.WriteFile(levelProtoPath, myproto.LevelProto, 0644); err != nil {
+			return fmt.Errorf("writing level protobuf: %w", err)
+		}
+
+		// Generate protobuf
 		protoDir := filepath.Join(projectRoot, "proto")
 		generatedDir := filepath.Join(srcDir, "generated")
 		if err := protobuf.Generate(protoDir, generatedDir); err != nil {
 			return fmt.Errorf("generating protobuf: %w", err)
 		}
 
-		// Step 3: Compile Clay
+		// Compile Clay
 		clayDir := filepath.Join(projectRoot, "vendor", "clay")
 		_, err = clay.Compile(clayDir, currentTarget)
 		if err != nil {
 			return fmt.Errorf("compiling clay: %w", err)
 		}
 
-		// Step 4: Ensure Steam libraries (if platform is steam)
+		// Ensure Steam libraries (if platform is steam)
 		var steamLib *steamworks.LibraryInfo
 		if runPlatform == "steam" {
 			steamworksDir := filepath.Join(projectRoot, "vendor", "steamworks", "redistributable_bin")
@@ -75,7 +82,7 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		// Step 5: Compile Odin
+		// Compile Odin
 		outputName := platform.GetOutputName(currentTarget, config.BinaryName)
 		outputPath := filepath.Join(projectRoot, outputName)
 		platformCollectionPath := fmt.Sprintf("src/platforms/%s", runPlatform)
@@ -94,7 +101,7 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("compiling odin: %w", err)
 		}
 
-		// Step 6: Copy Steam library to project root (if steam platform)
+		// Copy Steam library to project root (if steam platform)
 		var copiedLibPath string
 		if runPlatform == "steam" && steamLib != nil {
 			libName := filepath.Base(steamLib.RuntimeLib)
@@ -106,7 +113,7 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		// Step 7: Execute binary
+		// Execute binary
 		fmt.Printf("\nRunning %s...\n", outputPath)
 		fmt.Println("----------------------------------------")
 
@@ -128,13 +135,13 @@ var runCmd = &cobra.Command{
 
 		runErr := runCmd.Run()
 
-		// Step 8: Clean up binary
+		// Clean up binary
 		fmt.Printf("\nCleaning up %s...\n", filepath.Base(outputPath))
 		if err := os.Remove(outputPath); err != nil {
 			fmt.Printf("Warning: Failed to clean up binary: %v\n", err)
 		}
 
-		// Step 9: Clean up Steam library after exit
+		// Clean up Steam library after exit
 		if copiedLibPath != "" {
 			fmt.Printf("Cleaning up %s...\n", filepath.Base(copiedLibPath))
 			if err := os.Remove(copiedLibPath); err != nil {

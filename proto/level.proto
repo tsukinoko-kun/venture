@@ -1,6 +1,5 @@
 syntax = "proto3";
-
-package level;
+package venture;
 
 // Go-specific options
 option go_package = "github.com/bloodmagesoftware/venture/proto/level";
